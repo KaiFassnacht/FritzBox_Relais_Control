@@ -4,118 +4,127 @@
 #include "sip.h"
 
 char myIPAddress[16];
+unsigned long letzteAktivitaet = 0;
 
-// Puffer für die SIP-Nachrichten (2KB sind ausreichend für die FRITZ!Box)
 char sipBuffer[2048];
 Sip sip(sipBuffer, sizeof(sipBuffer));
 
-// Timer-Variablen
-unsigned long lastRegistration = 0;
-const unsigned long registrationInterval = 30 * 60 * 1000; // Alle 30 Minuten (in ms)
+// Timer & Status
+unsigned long lastRegister = 0;
 bool eth_connected = false;
 
-// Event-Handler für Ethernet
+
 void WiFiEvent(WiFiEvent_t event) {
     switch (event) {
-        case ARDUINO_EVENT_ETH_START:
-            Serial.println("ETH Gestartet");
-            ETH.setHostname("WT32-Relaisgateway");
-            break;
-        case ARDUINO_EVENT_ETH_CONNECTED:
-            Serial.println("ETH Verbunden");
-            break;
+        case ARDUINO_EVENT_ETH_START: Serial.println("ETH Gestartet"); break;
+        case ARDUINO_EVENT_ETH_CONNECTED: Serial.println("ETH Verbunden"); break;
         case ARDUINO_EVENT_ETH_GOT_IP:
             Serial.print("ETH IP erhalten: ");
             Serial.println(ETH.localIP());
             eth_connected = true;
             break;
-        case ARDUINO_EVENT_ETH_DISCONNECTED:
-            Serial.println("ETH getrennt!");
-            eth_connected = false;
-            break;
-        case ARDUINO_EVENT_ETH_STOP:
-            Serial.println("ETH Gestoppt");
-            eth_connected = false;
-            break;
-        default:
-            break;
+        case ARDUINO_EVENT_ETH_DISCONNECTED: eth_connected = false; break;
+        default: break;
     }
 }
 
+struct RelaisStatus {
+    int pin;
+    unsigned long startMillis;
+    bool aktiv;
+};
 
-unsigned long lastRegister = 0;
-bool relaisAktiv = false;
-unsigned long relaisStartMillis = 0;
-
+// Das Array wird nun automatisch aus der settings.h befüllt
+RelaisStatus relaisListe[10];
 
 void setup() {
     Serial.begin(115200);
-    pinMode(RELAIS_PIN, OUTPUT);
-    digitalWrite(RELAIS_PIN, LOW);
-    // Event-Handler registrieren bevor ETH startet
-    WiFi.onEvent(WiFiEvent);
     
-    // ETH am WT32-ETH01 starten
+    // Initialisierung basierend auf dem Mapping in settings.h
+    for (int i = 0; i < 10; i++) {
+        relaisListe[i].pin = TASTEN_MAP[i]; // Zuweisung aus settings.h
+        relaisListe[i].aktiv = false;
+        relaisListe[i].startMillis = 0;
+
+        if (relaisListe[i].pin != -1) {
+            pinMode(relaisListe[i].pin, OUTPUT);
+            digitalWrite(relaisListe[i].pin, LOW);
+            Serial.printf("SETUP| Taste %d zugewiesen an GPIO %d\n", i, relaisListe[i].pin);
+        }
+    }
+
+    WiFi.onEvent(WiFiEvent);
     ETH.begin();
 
-    // Warten bis IP vorhanden
     while (!eth_connected) {
         delay(500);
         Serial.print(".");
     }
 
     strncpy(myIPAddress, ETH.localIP().toString().c_str(), 15);
-    myIPAddress[15] = '\0'; // Sicherstellen, dass der Text endet
+    myIPAddress[15] = '\0';
 
-    // 3. Jetzt die Init-Funktion mit der festen Variable aufrufen
-    sip.Init(fritzbox_ip, 
-             sip_port, 
-             myIPAddress,  // <--- Hier nutzen wir jetzt den festen Speicher
-             sip_port, 
-             sip_user, 
-             sip_password);
-
-    Serial.println("\nSIP Initialisiert. Starte Erst-Registrierung...");
-    sip.Register(); // Die erste Anmeldung an der Box
-    lastRegistration = millis();
+    sip.Init(fritzbox_ip, sip_port, myIPAddress, sip_port, sip_user, sip_password);
+    
+    Serial.println("\nSIP Gateway bereit. 7 Relais aktiv (Tasten 0-6).");
+    sip.Register();
+    lastRegister = millis();
 }
 
 void loop() {
-    // 1. SIP-Pakete verarbeiten (Extrem wichtig!)
     sip.HandleUdpPacket();
 
-// PRÜFUNG: Wurde gerade ein Anruf angenommen?
-    if (sip.IsBusy() && !relaisAktiv) {
-        Serial.println("SYSTEM| Anruf erkannt - Relais AN");
-        digitalWrite(RELAIS_PIN, HIGH);
-        relaisAktiv = true;
-        relaisStartMillis = millis();
+    if (sip.IsBusy()) {
+        // Initialer Zeitstempel, wenn der Anruf gerade erst startete
+        if (letzteAktivitaet == 0) {
+            letzteAktivitaet = millis();
+        }
+
+        if (sip.lastDtmfDigit != 0) {
+            // BEI TASTENDRUCK: Timer zurücksetzen
+            letzteAktivitaet = millis(); 
+            
+            char taste = sip.lastDtmfDigit;
+            sip.lastDtmfDigit = 0; 
+            
+            if (taste >= '0' && taste <= '9') {
+                int index = taste - '0';
+                if (relaisListe[index].pin != -1) {
+                    Serial.printf("SYSTEM| Taste '%c' -> Schalte GPIO %d\n", taste, relaisListe[index].pin);
+                    digitalWrite(relaisListe[index].pin, HIGH);
+                    relaisListe[index].aktiv = true;
+                    relaisListe[index].startMillis = millis();
+                }
+            }
+        }
+
+        // PRÜFUNG: 10 Sekunden nichts passiert?
+        if (millis() - letzteAktivitaet > INAKTIVITAETS_TIMEOUT) {
+            Serial.println("SYSTEM| Inaktivitäts-Timeout! Lege auf...");
+            sip.Bye(10); // Aktiv auflegen
+            letzteAktivitaet = 0; // Reset für den nächsten Anruf
+        }
+
+    } else {
+        // Wenn nicht busy, Timer auf 0 halten
+        letzteAktivitaet = 0;
+        sip.lastDtmfDigit = 0;
     }
 
-    // PRÜFUNG: Ist die Zeit aus den Settings abgelaufen?
-    if (relaisAktiv) {
-        if (millis() - relaisStartMillis >= RELAIS_DAUER) {
-            Serial.println("SYSTEM| Zeit abgelaufen. Relais AUS und lege aktiv auf.");
-            digitalWrite(RELAIS_PIN, LOW);
-            relaisAktiv = false;
-            
-            // Wir rufen die vorhandene Bye-Funktion auf. 
-            // Wir nehmen eine feste höhere CSeq (z.B. 10), damit die Fritzbox es akzeptiert.
-            sip.Bye(10); 
-            
-            // Wichtig: Den Status in der SIP Klasse auch zurücksetzen, 
-            // damit IsBusy() wieder false wird.
-            // Falls iRingTime private ist, brauchen wir eine Methode dafür oder 
-            // wir setzen sie in der sip.cpp innerhalb von Bye auf 0.
+    // --- Zeitsteuerung Relais-Ausschalten (bleibt wie es war) ---
+    for (int i = 0; i < 10; i++) {
+        if (relaisListe[i].aktiv) {
+            if (millis() - relaisListe[i].startMillis >= RELAIS_DAUER) {
+                digitalWrite(relaisListe[i].pin, LOW);
+                relaisListe[i].aktiv = false;
+                Serial.printf("SYSTEM| Relais an Taste %d (GPIO %d) aus.\n", i, relaisListe[i].pin);
+            }
         }
     }
-    // Re-Registrierung alle 4 Minuten (300s / 1.2)
+
+    // --- SIP Registrierung ---
     if (millis() - lastRegister > 240000) {
         sip.Register();
         lastRegister = millis();
     }
-
-
-
-
 }

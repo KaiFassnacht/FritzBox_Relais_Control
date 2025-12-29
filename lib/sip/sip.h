@@ -71,6 +71,7 @@ class Sip
     bool        IsBusy() { return iRingTime != 0; }
     const char* GetSIPServerIP(void);
     char        audioport[7];
+    char        lastDtmfDigit = 0; // Speichert die zuletzt gedrückte Taste
 };
 
 #endif

@@ -13,6 +13,7 @@ Sip::Sip(char *pBuf, size_t lBuf) {
     iRingTime = 0;
     callid = 0;
     tagid = 0;
+    lastDtmfDigit = 0;
 }
 
 void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd) {
@@ -30,66 +31,94 @@ void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, con
 void Sip::HandleUdpPacket() {
     static char caSipIn[2048];
     int packetSize = udp.parsePacket();
-    if (packetSize > 0) {
-        int len = udp.read(caSipIn, sizeof(caSipIn) - 1);
-        caSipIn[len] = 0;
-        char *p = caSipIn;
+    
+    if (packetSize <= 0) return;
 
-        Serial.println("\n>>> SIP EMPFANGEN:");
-        Serial.println(p);
-        Serial.println("-------------------");
+    int len = udp.read(caSipIn, sizeof(caSipIn) - 1);
+    caSipIn[len] = 0;
+    char *p = caSipIn;
 
-        if (strstr(p, "SIP/2.0 401 Unauthorized") == p) {
-            if (strstr(p, "CSeq: 1 REGISTER") || strstr(p, "CSeq: 2 REGISTER") || strstr(p, "CSeq: 100 REGISTER")) {
-                Serial.println("DEBUG| 401 für REGISTER -> Sende Auth...");
-                Register(p); 
-            } else {
-                Serial.println("DEBUG| 401 für INVITE -> Sende ACK & Auth...");
-                Ack(p);
-                Invite(p);
-            }
+    Serial.println("\n>>> SIP EMPFANGEN:");
+    Serial.println(p);
+    Serial.println("-------------------");
+
+    // --- 1. Antwort auf Unauthorized (401) ---
+    if (strstr(p, "SIP/2.0 401 Unauthorized") == p) {
+        if (strstr(p, "CSeq: 1 REGISTER") || strstr(p, "CSeq: 2 REGISTER") || strstr(p, "CSeq: 100 REGISTER")) {
+            Serial.println("DEBUG| 401 für REGISTER -> Sende Auth...");
+            Register(p); 
+        } else {
+            Serial.println("DEBUG| 401 für INVITE -> Sende ACK & Auth...");
+            Ack(p);
+            Invite(p);
         }
-        else if (strstr(p, "SIP/2.0 200") == p) {
-            Serial.println("DEBUG| 200 OK erhalten.");
-            if (strstr(p, "CSeq: 1 INVITE") || strstr(p, "CSeq: 2 INVITE")) {
-                Ack(p);
-            }
+    }
+    
+    // --- 2. Antwort auf OK (200) ---
+    else if (strstr(p, "SIP/2.0 200") == p) {
+        Serial.println("DEBUG| 200 OK erhalten.");
+        if (strstr(p, "CSeq: 1 INVITE") || strstr(p, "CSeq: 2 INVITE")) {
+            Ack(p);
         }
-        else if (strstr(p, "INVITE sip:") == p) {
-            Serial.println("DEBUG| EINGEHENDER ANRUF ERKANNT!");
+    }
+
+    // --- 3. Eingehender Anruf (INVITE) ---
+    else if (strstr(p, "INVITE sip:") == p) {
+        Serial.println("DEBUG| EINGEHENDER ANRUF ERKANNT!");
+        
+        ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\r');
+        if (strlen(caCallIdIn) == 0) ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\n');
+
+        // From Header extrahieren
+        char* f = strstr(p, "From: ");
+        if (f) {
+            char* fe = strpbrk(f, "\r\n");
+            int flen = fe - f - 6;
+            if (flen > 127) flen = 127;
+            strncpy(caFromIn, f + 6, flen);
+            caFromIn[flen] = 0;
+        }
+
+        // To Header extrahieren
+        char* t = strstr(p, "To: ");
+        if (t) {
+            char* te = strpbrk(t, "\r\n");
+            int tlen = te - t - 4;
+            if (tlen > 127) tlen = 127;
+            strncpy(caToIn, t + 4, tlen);
+            caToIn[tlen] = 0;
+        }
+
+        iRingTime = millis();
+        Ok(p); // Den Anruf annehmen
+    }
+
+    // --- 4. DTMF Töne (INFO) ---
+    else if (strstr(p, "INFO sip:") == p) {
+        Serial.println("DEBUG| DTMF INFO empfangen!");
+        
+        // Suche nach "Signal=" im Body der Nachricht
+        char* s = strstr(p, "Signal=");
+        if (s) {
+            // Pointer auf das Zeichen nach "Signal=" setzen
+            char* digitPtr = s + 7;
+            // Eventuelle Leerzeichen überspringen
+            while (*digitPtr == ' ') digitPtr++;
             
-            // Call-ID sicher extrahieren
-            ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\r');
-            if (strlen(caCallIdIn) == 0) ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\n');
-
-            // From und To Header komplett zwischenspeichern (inkl. Tags)
-            // Wir nutzen eine Hilfsfunktion, um die ganze Zeile zu kriegen
-            char* f = strstr(p, "From: ");
-            if (f) {
-                char* fe = strpbrk(f, "\r\n");
-                int len = fe - f - 6; // -6 um "From: " abzuziehen
-                if (len > 127) len = 127;
-                strncpy(caFromIn, f + 6, len);
-                caFromIn[len] = 0;
-            }
-
-            char* t = strstr(p, "To: ");
-            if (t) {
-                char* te = strpbrk(t, "\r\n");
-                int len = te - t - 4; // -4 um "To: " abzuziehen
-                if (len > 127) len = 127;
-                strncpy(caToIn, t + 4, len);
-                caToIn[len] = 0;
-            }
-
-            iRingTime = millis();
-            Ok(p);
+            lastDtmfDigit = *digitPtr; 
+            Serial.printf("DEBUG| Taste erkannt: %c\n", lastDtmfDigit);
         }
-        else if (strstr(p, "BYE sip:") == p) {
-            Serial.println("DEBUG| Aufgelegt.");
-            Ok(p);
-            iRingTime = 0;
-        }
+        
+        // Jede INFO-Anfrage muss zwingend mit 200 OK beantwortet werden
+        Ok(p);
+    }
+
+    // --- 5. Aufgelegt (BYE) ---
+    else if (strstr(p, "BYE sip:") == p) {
+        Serial.println("DEBUG| Aufgelegt.");
+        Ok(p);
+        iRingTime = 0;
+        lastDtmfDigit = 0; // Reset der DTMF Variable
     }
 }
 
