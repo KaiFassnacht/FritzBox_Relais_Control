@@ -7,6 +7,8 @@ char myIPAddress[16];
 unsigned long letzteAktivitaet = 0;
 bool timeoutWarned = false; 
 bool startTonePlayed = false; // Neu: Damit der Start-Ton nur einmal kommt
+String aktuelleEingabe = "";
+int geschuetzteTaste = -1; // -1 bedeutet: wir warten auf die Wahl einer Taste
 
 char sipBuffer[2048];
 Sip sip(sipBuffer, sizeof(sipBuffer));
@@ -85,17 +87,18 @@ void loop() {
             letzteAktivitaet = millis();
             timeoutWarned = false;
             startTonePlayed = false;
+            geschuetzteTaste = -1; // PIN-Status bei Anrufbeginn zurücksetzen
+            aktuelleEingabe = "";
             Serial.println("CALL| Eingehender Anruf...");
         }
 
-        // NEU: Audio erst senden, wenn das ACK da ist (isConnected == true)
         if (sip.isConnected && !startTonePlayed) {
             Serial.println("CALL| Handshake komplett. Sende Bereit-Signal.");
             sip.rtp.playToneStart(); 
             startTonePlayed = true;
         }
 
-        // --- 2. DTMF AUSWERTUNG (Nur wenn verbunden) ---
+        // --- 2. DTMF AUSWERTUNG (Mit PIN-Logik) ---
         if (sip.lastDtmfDigit != 0) {
             letzteAktivitaet = millis(); 
             timeoutWarned = false;       
@@ -103,19 +106,65 @@ void loop() {
             char taste = sip.lastDtmfDigit;
             sip.lastDtmfDigit = 0; 
 
-            // Töne nur senden, wenn die Leitung steht
             if (sip.isConnected) {
-                if (taste >= '0' && taste <= '9') {
+                // FALL # : Sofort Auflegen (Höchste Priorität)
+                if (taste == '#') {
+                    Serial.println("ACTION| '#' erkannt. Beende Gespräch...");
+                    sip.Bye(0);
+                    // Reset erfolgt im "else" Teil von IsBusy
+                }
+                
+                // FALL 0-9 : Zifferneingabe
+                else if (taste >= '0' && taste <= '9') {
                     int index = taste - '0';
-                    if (relaisListe[index].pin != -1) {
-                        Serial.printf("ACTION| Taste '%c' -> Schalte GPIO %d\n", taste, relaisListe[index].pin);
-                        digitalWrite(relaisListe[index].pin, HIGH);
-                        relaisListe[index].aktiv = true;
-                        relaisListe[index].startMillis = millis();
-                        sip.rtp.playToneOk(); 
-                    } else {
-                        Serial.printf("ALARM| Taste '%c' nicht belegt.\n", taste);
-                        sip.rtp.playToneAlarm(); 
+
+                    // A) Wir befinden uns gerade in einer PIN-Eingabe für eine geschützte Taste
+                    if (geschuetzteTaste != -1) {
+                        aktuelleEingabe += taste;
+                        const char* zielPin = Security::PINS[geschuetzteTaste];
+                        
+                        // Prüfen, ob die benötigte PIN-Länge erreicht ist
+                        if (aktuelleEingabe.length() >= strlen(zielPin)) {
+                            if (aktuelleEingabe == String(zielPin)) {
+                                Serial.printf("SECURITY| PIN korrekt für Taste %d. Schalte GPIO %d\n", geschuetzteTaste, relaisListe[geschuetzteTaste].pin);
+                                if (relaisListe[geschuetzteTaste].pin != Pins::UNUSED) {
+                                    digitalWrite(relaisListe[geschuetzteTaste].pin, HIGH);
+                                    relaisListe[geschuetzteTaste].aktiv = true;
+                                    relaisListe[geschuetzteTaste].startMillis = millis();
+                                    sip.rtp.playToneOk();
+                                }
+                            } else {
+                                Serial.println("SECURITY| PIN FALSCH!");
+                                sip.rtp.playToneErr();
+                            }
+                            // Reset PIN-Status nach Versuch (egal ob Erfolg oder Fehler)
+                            geschuetzteTaste = -1;
+                            aktuelleEingabe = "";
+                        }
+                    } 
+                    // B) Neue Tastenwahl
+                    else {
+                        const char* benoetigtePin = Security::PINS[index];
+                        
+                        if (strlen(benoetigtePin) > 0) {
+                            // Taste erfordert PIN
+                            Serial.printf("SECURITY| Taste %d ist geschützt. Warte auf PIN...\n", index);
+                            geschuetzteTaste = index;
+                            aktuelleEingabe = "";
+                            sip.rtp.playPinRequest(); // Kurzer Hinweiston zur Eingabeaufforderung
+                        } else {
+                            // Taste ist ungeschützt -> Normal schalten
+                            if (relaisListe[index].pin != Pins::UNUSED) {
+                                Serial.printf("ACTION| Taste '%c' -> Schalte GPIO %d\n", taste, relaisListe[index].pin);
+                                digitalWrite(relaisListe[index].pin, HIGH);
+                                relaisListe[index].aktiv = true;
+                                relaisListe[index].startMillis = millis();
+                                sip.rtp.playToneOk(); 
+                            } else {
+                                Serial.printf("ALARM| Taste '%c' nicht belegt.\n", taste);
+                                sip.rtp.playToneAlarm(); 
+                            }
+                        }
                     }
                 } else {
                     sip.rtp.playToneErr();
@@ -128,7 +177,7 @@ void loop() {
 
         if (sip.isConnected && dauerAktiv > (Timing::INAKTIVITAETS_TIMEOUT - 2000) && !timeoutWarned) {
             Serial.println("CALL| Sende Timeout-Warnung...");
-            sip.rtp.playTimeout(); // Hier die neue Methode nutzen!
+            sip.rtp.playTimeout(); 
             timeoutWarned = true;
         }
 
@@ -140,13 +189,15 @@ void loop() {
         }
 
     } else {
-        // Reset, wenn kein Gespräch aktiv ist
+        // Reset, wenn kein Gespräch aktiv ist oder aufgelegt wurde
         if (letzteAktivitaet != 0) {
-            Serial.println("CALL| Gespräch beendet.");
+            Serial.println("CALL| Verbindung getrennt. Reset Status.");
             letzteAktivitaet = 0;
             timeoutWarned = false;
             startTonePlayed = false;
-            sip.isConnected = false; // WICHTIG: Flag für den nächsten Anruf zurücksetzen
+            sip.isConnected = false; 
+            geschuetzteTaste = -1; // Wichtig: PIN-Eingabe bei Abbruch löschen
+            aktuelleEingabe = "";
         }
         sip.lastDtmfDigit = 0;
     }
@@ -154,7 +205,6 @@ void loop() {
     // Zeitsteuerung Relais (Impuls)
     for (int i = 0; i < 10; i++) {
         if (relaisListe[i].aktiv) {
-            // Nutze Timing::RELAIS_DAUER
             if (millis() - relaisListe[i].startMillis >= Timing::RELAIS_DAUER) {
                 digitalWrite(relaisListe[i].pin, LOW);
                 relaisListe[i].aktiv = false;

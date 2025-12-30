@@ -38,7 +38,7 @@ class RtpAudio {
     void playToneAlarm()   { playSequence(AudioSequences::ALARM); }
     void playToneStart()   { playSequence(AudioSequences::START); }
     void playTimeout()   { playSequence(AudioSequences::TIMEOUT); }
-
+    void playPinRequest() { playSequence(AudioSequences::PIN_REQUEST); }
     void playTone(float frequency, int durationMs);
 };
 
