@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIP Gateway Config</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>SIP Gateway Konfiguration</h1>
+        <form action="/save" method="POST">
+            <div class="section">
+                <h3>1. SIP & Netzwerk</h3>
+                <p>Registrar: <input type="text" name="sipReg" value="%SIPREG%"></p>
+                <p>Benutzer: <input type="text" name="sipUser" value="%SIPUSER%"> 
+                   Passwort: <input type="password" name="sipPass" value="%SIPPASS%"></p>
+                <p>Whitelist: <input type="text" name="whitelist" value="%WHITELIST%"></p>
+            </div>
+            <div class="section">
+                <h3>2. Relais & Sicherheit</h3>
+                <table>
+                    <thead>
+                        <tr><th>Taste</th><th>GPIO</th><th>PIN</th><th>Whitelist</th></tr>
+                    </thead>
+                    <tbody>
+                        %RELAIS_TABLE%
+                    </tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h3>3. Zeit-Einstellungen</h3>
+                <p>
+                    Relais-Einschaltdauer (ms): 
+                    <input type="number" name="relDur" value="%RELDUR%" min="100" max="30000">
+                </p>
+                <p>
+                    Anruf-Timeout (ms): 
+                    <input type="number" name="tout" value="%TIMEOUT%" min="5000" max="3600000">
+                </p>
+            </div>
+            <button type="submit" class="btn">Speichern & Neustart</button>
+        </form>
+    </div>
+</body>
+</html>
