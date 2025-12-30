@@ -60,8 +60,11 @@ void RtpAudio::playTone(float frequency, int durationMs) {
 }
 
 
-void RtpAudio::playToneOk()      { playTone(TONE_OK_FREQ_1, TONE_OK_DURATION); delay(20); playTone(TONE_OK_FREQ_2, TONE_OK_DURATION); }
-void RtpAudio::playToneErr()     { playTone(TONE_ERR_FREQ_1, TONE_ERR_DURATION); delay(20); playTone(TONE_ERR_FREQ_2, TONE_ERR_DURATION); }
-void RtpAudio::playToneAlarm()   { playTone(TONE_ALARM_FREQ_1, TONE_ALARM_DURATION); playTone(TONE_ALARM_FREQ_2, TONE_ALARM_DURATION); playTone(TONE_ALARM_FREQ_3, TONE_ALARM_DURATION); }
-void RtpAudio::playToneTimeout() { playTone(TONE_TIMEOUT_FREQ_1, TONE_TIMEOUT_DURATION); delay(50); playTone(TONE_TIMEOUT_FREQ_2, TONE_TIMEOUT_DURATION); }
-void RtpAudio::playToneStart()   { playTone(TONE_START_FREQ, TONE_START_DURATION); }
+void RtpAudio::playSequence(const ToneStep* steps, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        playTone(steps[i].freq, steps[i].duration);
+        if (steps[i].pause > 0) {
+            delay(steps[i].pause); // Hier wird die Pause aus der settings.h umgesetzt
+        }
+    }
+}
