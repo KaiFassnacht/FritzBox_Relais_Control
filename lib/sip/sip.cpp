@@ -42,6 +42,8 @@ Sip::Sip(char *pBuf, size_t lBuf) {
     lbuf = lBuf;
     iRingTime = 0;
     lastDtmfDigit = 0;
+    isConnected = false;
+    caCallerNr[0] = 0;
 }
 
 void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd) {
@@ -125,7 +127,6 @@ void Sip::HandleUdpPacket() {
             strncpy(caFromIn, f + 6, flen);
             caFromIn[flen] = 0;
         }
-
         // To Header extrahieren
         char* t = strstr(p, "To: ");
         if (t) {
@@ -136,6 +137,34 @@ void Sip::HandleUdpPacket() {
             caToIn[tlen] = 0;
         }
         
+        caCallerNr[0] = 0; // Sicherstellen, dass sie leer ist
+
+        // Suche nach dem "From:" Header im gesamten Paket
+        const char* fromHeader = strstr(p, "From:");
+        if (fromHeader) {
+            // Suche innerhalb der From-Zeile nach "sip:"
+            const char* sipStart = strstr(fromHeader, "sip:");
+            if (sipStart) {
+                sipStart += 4; // Überspringe "sip:"
+                
+                // Suche das Ende der Nummer (entweder '@' oder '>')
+                const char* sipEnd = strpbrk(sipStart, "@>");
+                if (sipEnd) {
+                    int len = sipEnd - sipStart;
+                    if (len > 0 && len < (int)sizeof(caCallerNr)) {
+                        strncpy(caCallerNr, sipStart, len);
+                        caCallerNr[len] = '\0';
+                    }
+                }
+            }
+        }
+
+        // Debugging-Ausgabe zur Kontrolle
+        if (strlen(caCallerNr) > 0) {
+            Serial.printf("DEBUG| Anrufer-Nummer erkannt: %s\n", caCallerNr);
+        } else {
+            Serial.println("DEBUG| Anrufer-Nummer konnte NICHT extrahiert werden!");
+        }
         iLastInCSeq = GrepInteger(p, "CSeq: "); // Speichere die CSeq der Fritzbox
         iRingTime = millis();
         Ok(p); // Den Anruf annehmen

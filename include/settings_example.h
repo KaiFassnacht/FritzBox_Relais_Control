@@ -78,8 +78,55 @@ namespace AudioSequences {
         {150, 60, 100}, // Erster Schlag (tief), 100ms Pause
         {150, 60, 0}    // Zweiter Schlag    };
     };
+    
+    // Ein eleganter, zweistufiger Hinweiston (Frequenzen 880Hz und 1046Hz)
+    constexpr ToneStep PIN_REQUEST[] = {
+        {880, 80, 40},  // Ton A: 880Hz, 80ms lang, 40ms Pause
+        {1046, 120, 0},  // Ton B: 1046Hz (C6), 120ms lang
+        {880, 80, 40},  // Ton A: 880Hz, 80ms lang, 40ms Pause
+        {1046, 120, 0}  // Ton B: 1046Hz (C6), 120ms lang
+    };
 
 }
 
+namespace Security {
+    // Wenn der String leer ist "", ist die Taste ungeschützt.
+    // Ansonsten muss genau dieser PIN eingegeben werden.
+    constexpr const char* PINS[10] = {
+        "",     // Taste 0:
+        "",     // Taste 1:
+        "1111", // Taste 2:
+        "",     // Taste 3:
+        "",     // Taste 4:
+        "",     // Taste 5:
+        "",     // Taste 6:
+        "",     // Taste 7:
+        "",     // Taste 8:
+        ""      // Taste 9:
+    };
+    // Liste der erlaubten Rufnummern (Whitelist)
+    constexpr const char* WHITELIST[] = {
+        "01711234567", 
+        "**611" // Interne Nummer der FritzBox
+    };
+    constexpr int WHITELIST_SIZE = sizeof(WHITELIST) / sizeof(WHITELIST[0]);
+
+    // Welche Tasten prüfen die Whitelist? (true = nur für Whitelist-Kontakte)
+    constexpr bool WHITELIST_REQUIRED[10] = {
+        false,   // Taste 0:
+        true,   // Taste 1:
+        true,   // Taste 2:
+        true,   // Taste 3:
+        true,   // Taste 4:
+        false,  // Taste 5:
+        false,  // Taste 6:
+        false,  // Taste 7:
+        false,  // Taste 8:
+        false   // Taste 9:
+    };
+
+
+
+}
 
 #endif

@@ -61,8 +61,9 @@ class Sip {
     char        lastDtmfDigit = 0;
     int         iLastInCSeq = 0;
     RtpAudio    rtp;
-
+    char caCallerNr[64];
     bool isConnected = false;
+
 };
 
 #endif

@@ -34,6 +34,15 @@ void WiFiEvent(WiFiEvent_t event) {
     }
 }
 
+bool isCallerWhitelisted() {
+    for (int i = 0; i < Security::WHITELIST_SIZE; i++) {
+        if (strcmp(sip.caCallerNr, Security::WHITELIST[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct RelaisStatus {
     int pin;
     unsigned long startMillis;
@@ -117,6 +126,12 @@ void loop() {
                 // FALL 0-9 : Zifferneingabe
                 else if (taste >= '0' && taste <= '9') {
                     int index = taste - '0';
+                    // NEU: Whitelist Prüfung
+                    if (Security::WHITELIST_REQUIRED[index] && !isCallerWhitelisted()) {
+                        Serial.printf("SECURITY| Sperre: Anrufer %s steht nicht auf der Whitelist für Taste %d!\n", sip.caCallerNr, index);
+                        sip.rtp.playToneErr(); // Fehler-Ton
+                        return; // Aktion abbrechen
+                    }
 
                     // A) Wir befinden uns gerade in einer PIN-Eingabe für eine geschützte Taste
                     if (geschuetzteTaste != -1) {
