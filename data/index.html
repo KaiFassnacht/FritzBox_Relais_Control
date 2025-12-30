@@ -10,13 +10,42 @@
     <div class="container">
         <h1>SIP Gateway Konfiguration</h1>
         <form action="/save" method="POST">
+            
             <div class="section">
                 <h3>1. SIP & Netzwerk</h3>
-                <p>Registrar: <input type="text" name="sipReg" value="%SIPREG%"></p>
-                <p>Benutzer: <input type="text" name="sipUser" value="%SIPUSER%"> 
-                   Passwort: <input type="password" name="sipPass" value="%SIPPASS%"></p>
-                <p>Whitelist: <input type="text" name="whitelist" value="%WHITELIST%"></p>
+                
+                <div class="input-row">
+                    <div class="inline-group">
+                        <label>Registrar:</label>
+                        <input type="text" name="sipReg" value="%SIPREG%">
+                    </div>
+                    <div class="inline-group small">
+                        <label>SIP Port:</label>
+                        <input type="number" name="sipPort" value="%SIPPORT%">
+                    </div>
+                    <div class="inline-group small">
+                        <label>RTP Port:</label>
+                        <input type="number" name="rtpPort" value="%RTPPORT%">
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <div class="inline-group">
+                        <label>Benutzer:</label>
+                        <input type="text" name="sipUser" value="%SIPUSER%">
+                    </div>
+                    <div class="inline-group">
+                        <label>Passwort:</label>
+                        <input type="password" name="sipPass" value="%SIPPASS%">
+                    </div>
+                </div>
+
+                <p>
+                    <label>Whitelist:</label>
+                    <input type="text" name="whitelist" value="%WHITELIST%">
+                </p>
             </div>
+
             <div class="section">
                 <h3>2. Relais & Sicherheit</h3>
                 <table>
@@ -28,19 +57,77 @@
                     </tbody>
                 </table>
             </div>
+
             <div class="section">
                 <h3>3. Zeit-Einstellungen</h3>
-                <p>
-                    Relais-Einschaltdauer (ms): 
+                <p>Relais-Einschaltdauer (ms):<br>
                     <input type="number" name="relDur" value="%RELDUR%" min="100" max="30000">
                 </p>
-                <p>
-                    Anruf-Timeout (ms): 
+                <p>Anruf-Timeout (ms):<br>
                     <input type="number" name="tout" value="%TIMEOUT%" min="5000" max="3600000">
                 </p>
             </div>
+
             <button type="submit" class="btn">Speichern & Neustart</button>
         </form>
     </div>
+    <div class="section" style="background:#fff5f5; border:1px solid #ffcccc;">
+        <h3>Gefahrenbereich</h3>
+        <p>Alle Einstellungen löschen und auf Werkswerte zurücksetzen:</p>
+        <button type="button" onclick="factoryReset()" style="background:#d9534f; color:white; padding:10px; border:none; border-radius:4px; cursor:pointer;">
+            Werkseinstellungen laden
+        </button>
+    </div>
+
+    <script>
+    function factoryReset() {
+        if (confirm("Sind Sie sicher? Alle Pin-Belegungen und SIP-Daten werden gelöscht!")) {
+            fetch('/factory-reset', { method: 'POST' })
+            .then(response => {
+                alert("Reset erfolgreich. Das Gateway startet neu. Bitte warten Sie 10 Sekunden.");
+                setTimeout(() => window.location.href = '/', 10000);
+            });
+        }
+    }
+    </script>
+    <div id="status-msg" style="display:none; margin-top:20px; padding:15px; background:#e2f3ff; border:1px solid #b8daff; border-radius:4px; text-align:center;"></div>
+    
+<script>
+document.querySelector('form').onsubmit = function(e) {
+    e.preventDefault(); // Verhindert das normale Laden der Seite
+    
+    const formData = new FormData(this);
+    const statusText = document.getElementById('status-msg');
+    
+    // Zeige eine Lade-Meldung
+    statusText.style.display = 'block';
+    statusText.innerHTML = "Speichere... Bitte warten.";
+
+    fetch('/save', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            let seconds = 5;
+            const timer = setInterval(() => {
+                statusText.innerHTML = `Gespeichert! Neustart erfolgt... Rückkehr zur Seite in ${seconds} Sekunden.`;
+                seconds--;
+                if (seconds < 0) {
+                    clearInterval(timer);
+                    window.location.reload(); // Seite neu laden
+                }
+            }, 1000);
+        } else {
+            statusText.innerHTML = "Fehler beim Speichern!";
+            statusText.style.color = "red";
+        }
+    })
+    .catch(error => {
+        statusText.innerHTML = "Verbindung verloren (Neustart läuft...)";
+        setTimeout(() => window.location.reload(), 5000);
+    });
+};
+</script>
 </body>
 </html>

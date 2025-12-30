@@ -48,16 +48,29 @@ void WiFiEvent(WiFiEvent_t event) {
 }
 
 bool isCallerWhitelisted() {
-    if (config.whitelist.length() == 0) return true; 
-    
-    char list[256];
-    config.whitelist.toCharArray(list, 256);
-    char* ptr = strtok(list, ",");
-    
-    while (ptr != NULL) {
-        if (strcmp(sip.caCallerNr, ptr) == 0) return true;
-        ptr = strtok(NULL, ",");
+    // 1. Sicherheits-Check: Wenn die Liste leer ist, ist der Zugriff IMMER verboten
+    if (config.whitelist.length() == 0) {
+        Serial.println("WHITELIST| Liste ist leer. Zugriff verweigert.");
+        return false; 
     }
+
+    String caller = String(sip.caCallerNr);
+    caller.trim();
+
+    // 2. Anonymer Anrufer?
+    if (caller.length() == 0 || caller.equalsIgnoreCase("anonymous")) {
+        Serial.println("WHITELIST| Anonymer Anrufer abgelehnt.");
+        return false;
+    }
+
+    // 3. Suche in der Liste
+    // Wir suchen nach der Nummer. Index -1 bedeutet: Nicht gefunden.
+    if (config.whitelist.indexOf(caller) != -1) {
+        Serial.printf("WHITELIST| %s gefunden! Zugriff erlaubt.\n", caller.c_str());
+        return true;
+    }
+
+    Serial.printf("WHITELIST| %s nicht in Liste. Zugriff verweigert.\n", caller.c_str());
     return false;
 }
 
@@ -78,7 +91,7 @@ void setup() {
     }
     
     Serial.println("\nSYSTEM| Starte SIP Relais Gateway...");
-// 1. Zuerst Config laden und bereinigen
+    // 1. Zuerst Config laden und bereinigen
     loadConfig(); 
 
     // 2. EXKLUSIV FÜR WT32-ETH01: Ethernet Power einschalten
@@ -115,9 +128,8 @@ void setup() {
 
     strncpy(myIPAddress, ETH.localIP().toString().c_str(), 15);
     
-    // SIP Init mit Werten aus dem Web-Interface
-    sip.Init(config.sipRegistrar, 5060, myIPAddress, 5060, config.sipUser, config.sipPass);
-    
+    sip.Init(config.sipRegistrar, config.sipPort, myIPAddress, config.sipPort, config.sipUser, config.sipPass);
+
     Serial.println("\nSYSTEM| SIP Gateway bereit.");
     sip.Register();
     lastRegister = millis();
@@ -181,11 +193,20 @@ void loop() {
                 else if (taste >= '0' && taste <= '9') {
                     int index = taste - '0';
                     
+                    // NEU: Wenn die Taste NICHT belegt ist (-1), spiele den Alarm-Ton
+                    if (config.relaisPins[index] == -1) {
+                        Serial.printf("SIP| Taste %d ist unbelegt -> Spiele Alarm-Ton.\n", index);
+                        sip.rtp.playToneAlarm(); // Hier wird der Ton für die unbelegte Taste gesendet
+                        return; // Danach abbrechen, da keine weitere Aktion (PIN/Relais) folgen soll
+                    }
                     // Whitelist Prüfung aus Config
-                    if (config.whitelistRequired[index] && !isCallerWhitelisted()) {
-                        Serial.printf("SECURITY| Sperre für %s\n", sip.caCallerNr);
-                        sip.rtp.playToneErr();
-                        return;
+                    if (config.whitelistRequired[index]) {
+                        if (!isCallerWhitelisted()) {
+                            // Dieser Block wird jetzt AUCH ausgeführt, wenn die Liste leer ist
+                            Serial.printf("SECURITY| Taste %d für Anrufer %s gesperrt!\n", index, sip.caCallerNr);
+                            sip.rtp.playToneErr(); // Fehler-Ton
+                            return; // Wichtig: Bricht die weitere Verarbeitung ab
+                        }
                     }
 
                     // PIN Eingabe Logik

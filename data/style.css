@@ -1,14 +1,117 @@
-body { font-family: sans-serif; margin: 20px; background: #f4f4f4; color: #333; }
-.container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-h1 { color: #007bff; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-th { background: #f8f9fa; }
-input[type="text"], input[type="number"], input[type="password"] { 
-    width: calc(100% - 20px); 
+/* Grundlegendes Design */
+body { 
+    font-family: sans-serif; 
+    margin: 20px; 
+    background: #f4f4f4; 
+    color: #333; 
+}
+
+.container { 
+    max-width: 800px; 
+    margin: auto; 
+    background: white; 
+    padding: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+}
+
+h1 { 
+    color: #007bff; 
+    border-bottom: 2px solid #eee; 
+    padding-bottom: 10px; 
+}
+
+/* Tabellen-Styling */
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin: 20px 0; 
+}
+
+th, td { 
+    padding: 12px; 
+    border: 1px solid #ddd; 
+    text-align: left; 
+}
+
+th { 
+    background: #f8f9fa; 
+}
+
+/* Allgemeine Input-Styles */
+input[type="text"], 
+input[type="number"], 
+input[type="password"] { 
+    width: 100%; /* Geändert von calc, Steuerung erfolgt über Container */
     padding: 8px; 
     border: 1px solid #ccc; 
     border-radius: 4px; 
+    box-sizing: border-box; /* Wichtig, damit Padding die Breite nicht sprengt */
 }
-.btn { padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-.section { margin-bottom: 30px; }
+
+/* Layout für die Zeilen (Neu) */
+.input-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: wrap; /* Bricht auf schmalen Bildschirmen automatisch um */
+}
+
+/* Gruppe aus Label und Input (Neu) */
+.inline-group {
+    flex: 2; /* Nimmt proportional Platz ein */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Spezielle Breite für kleine Felder wie Ports (Neu) */
+.inline-group.small {
+    flex: 0 0 100px; /* Feste Basisbreite von 100px */
+}
+
+/* Labels über den Feldern (Neu) */
+label {
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #555;
+}
+
+/* Button & Sektionen */
+.btn { 
+    padding: 12px 24px; 
+    background: #28a745; 
+    color: white; 
+    border: none; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-size: 16px; 
+    width: 100%; /* Button über die volle Breite auf Mobilgeräten praktisch */
+    margin-top: 10px;
+}
+
+.btn:hover {
+    background: #218838;
+}
+
+.section { 
+    margin-bottom: 30px; 
+    padding: 15px;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
+}
+
+h3 {
+    margin-top: 0;
+    color: #444;
+}
+
+/* Statusmeldung */
+#status-msg {
+    margin-top: 20px; 
+    padding: 15px; 
+    background: #e2f3ff; 
+    border: 1px solid #b8daff; 
+    border-radius: 4px; 
+    text-align: center;
+}

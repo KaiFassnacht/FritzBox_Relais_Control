@@ -7,6 +7,8 @@ struct GatewayConfig {
     char sipUser[32] = "611";
     char sipPass[32] = "password";
     char sipRegistrar[64] = "192.168.178.1";
+    uint16_t sipPort = 5060;     // Neu
+    uint16_t rtpPort = 10002;     // Neu
     
     // Korrigierte Standardwerte (KEIN Pin 16/17!)
     // Taste:        0  1   2   3   4   5   6   7   8   9

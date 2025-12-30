@@ -1,4 +1,7 @@
 #include "WebHandler.h"
+#include <Ticker.h>
+
+Ticker restartTimer;
 
 void WebHandler::begin() {
     setupRoutes();
@@ -10,11 +13,14 @@ String processor(const String& var) {
     if (var == "SIPREG") return (config.sipRegistrar[0] == '\0') ? "" : String(config.sipRegistrar);
     if (var == "SIPUSER") return (config.sipUser[0] == '\0') ? "" : String(config.sipUser);
     if (var == "SIPPASS") return (config.sipPass[0] == '\0') ? "" : String(config.sipPass);
+    if (var == "SIPPORT") return String(config.sipPort);
+    if (var == "RTPPORT") return String(config.rtpPort);
+
+
     if (var == "WHITELIST") return (config.whitelist.length() == 0) ? "" : config.whitelist;
     
     if (var == "RELDUR") return String(config.relaisDauer);
     if (var == "TIMEOUT") return String(config.timeout);
-
     if (var == "RELAIS_TABLE") {
         String table = "";
         for (int i = 0; i < 10; i++) {
@@ -57,48 +63,65 @@ void WebHandler::setupRoutes() {
     });
 
     server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
-        // SIP & Basis-Daten (Nutze request->arg für POST-Formulare)
-        if (request->hasArg("sipReg")) strlcpy(config.sipRegistrar, request->arg("sipReg").c_str(), 63);
-        if (request->hasArg("sipUser")) strlcpy(config.sipUser, request->arg("sipUser").c_str(), 31);
-        if (request->hasArg("sipPass")) strlcpy(config.sipPass, request->arg("sipPass").c_str(), 31);
-        if (request->hasArg("whitelist")) config.whitelist = request->arg("whitelist");
+        // 1. SIP & Ports (mit hasParam)
+        if (request->hasParam("sipReg", true)) strlcpy(config.sipRegistrar, request->getParam("sipReg", true)->value().c_str(), 63);
+        if (request->hasParam("sipUser", true)) strlcpy(config.sipUser, request->getParam("sipUser", true)->value().c_str(), 31);
+        if (request->hasParam("sipPass", true)) strlcpy(config.sipPass, request->getParam("sipPass", true)->value().c_str(), 31);
+        
+        if (request->hasParam("sipPort", true)) config.sipPort = request->getParam("sipPort", true)->value().toInt();
+        if (request->hasParam("rtpPort", true)) config.rtpPort = request->getParam("rtpPort", true)->value().toInt();
+        
+        if (request->hasParam("whitelist", true)) config.whitelist = request->getParam("whitelist", true)->value();
 
-        // NEU: Zeit-Einstellungen mit Sicherheitsprüfung
-        if (request->hasArg("relDur")) {
-            int val = request->arg("relDur").toInt();
-            // Minimum 100ms, Maximum 30 Sekunden
-            if (val < 100) val = 100;
-            if (val > 30000) val = 30000;
-            config.relaisDauer = val;
+        // 2. Zeit-Einstellungen
+        if (request->hasParam("relDur", true)) {
+            int val = request->getParam("relDur", true)->value().toInt();
+            config.relaisDauer = (val < 100) ? 100 : (val > 30000 ? 30000 : val);
         }
 
-        if (request->hasArg("tout")) {
-            int val = request->arg("tout").toInt();
-            // Minimum 5 Sekunden (5000ms), Maximum 1 Stunde (3600000ms)
-            // Damit man nicht sofort nach dem Abheben rausfliegt
-            if (val < 5000) val = 5000;
-            if (val > 3600000) val = 3600000;
-            config.timeout = val;
+        if (request->hasParam("tout", true)) {
+            int val = request->getParam("tout", true)->value().toInt();
+            config.timeout = (val < 5000) ? 5000 : (val > 3600000 ? 3600000 : val);
         }
-        // Relais-Tabelle auslesen
+
+        // 3. Relais-Tabelle (Schleife mit hasParam)
         for (int i = 0; i < 10; i++) {
             String pKey = "p" + String(i);
             String cKey = "c" + String(i);
             String wKey = "w" + String(i);
 
-            if (request->hasArg(pKey)) config.relaisPins[i] = request->arg(pKey).toInt();
-            if (request->hasArg(cKey)) strlcpy(config.pins[i], request->arg(cKey).c_str(), 7);
+            if (request->hasParam(pKey, true)) {
+                config.relaisPins[i] = request->getParam(pKey, true)->value().toInt();
+            }
+            if (request->hasParam(cKey, true)) {
+                strlcpy(config.pins[i], request->getParam(cKey, true)->value().c_str(), 7);
+            }
             
-            // Checkboxen sind nur im Request vorhanden, wenn sie angehakt sind
-            config.whitelistRequired[i] = request->hasArg(wKey);
+            // Checkboxen: hasParam liefert true, wenn die Box angehakt wurde
+            config.whitelistRequired[i] = request->hasParam(wKey, true);
         }
         
         saveConfig();
         
         request->send(200, "text/plain", "Konfiguration gespeichert. Das System startet in 2 Sekunden neu...");
+
+        restartTimer.once_ms(2000, []() {
+            ESP.restart();
+        });
+    });    
+    server.on("/factory-reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+        Serial.println("WEB| Factory Reset angefordert...");
         
-        // Timer statt delay(), damit der Request noch sauber abgeschlossen wird
-        DefaultHeaders::Instance().addHeader("Connection", "close");
-        ESP.restart(); // Hinweis: In manchen Umgebungen ist ein Timer sicherer als ein direkter Restart
+        // Datei löschen
+        if (LittleFS.exists("/config.json")) {
+            LittleFS.remove("/config.json");
+        }
+        
+        request->send(200, "text/plain", "Werkseinstellungen geladen. Neustart...");
+        
+        // Neustart via Timer, damit die Antwort noch rausgeht
+        restartTimer.once_ms(2000, []() {
+            ESP.restart();
+        });
     });
 }
