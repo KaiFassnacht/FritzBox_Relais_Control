@@ -45,11 +45,12 @@ void setup() {
     
     // Initialisierung der Relais-Pins
     for (int i = 0; i < 10; i++) {
-        relaisListe[i].pin = TASTEN_MAP[i];
+        // TASTEN_MAP ist global (oder Pins::TASTEN_MAP, falls du es verschoben hast)
+        relaisListe[i].pin = TASTEN_MAP[i]; 
         relaisListe[i].aktiv = false;
         relaisListe[i].startMillis = 0;
 
-        if (relaisListe[i].pin != -1) {
+        if (relaisListe[i].pin != Pins::UNUSED) { // Nutze Pins::UNUSED statt -1
             pinMode(relaisListe[i].pin, OUTPUT);
             digitalWrite(relaisListe[i].pin, LOW);
             Serial.printf("SETUP| Taste %d -> GPIO %d\n", i, relaisListe[i].pin);
@@ -67,7 +68,8 @@ void setup() {
     strncpy(myIPAddress, ETH.localIP().toString().c_str(), 15);
     myIPAddress[15] = '\0';
 
-    sip.Init(fritzbox_ip, sip_port, myIPAddress, sip_port, sip_user, sip_password);
+    // Nutze hier SipConfig::
+    sip.Init(SipConfig::SERVER_IP, SipConfig::PORT, myIPAddress, SipConfig::PORT, SipConfig::USER, SipConfig::PASSWORD);
     
     Serial.println("\nSYSTEM| SIP Gateway bereit.");
     sip.Register();
@@ -124,18 +126,17 @@ void loop() {
         // --- 3. TIMEOUT MANAGEMENT ---
         unsigned long dauerAktiv = millis() - letzteAktivitaet;
 
-        // Warnung nur senden, wenn verbunden
-        if (sip.isConnected && dauerAktiv > (INAKTIVITAETS_TIMEOUT - 2000) && !timeoutWarned) {
+        if (sip.isConnected && dauerAktiv > (Timing::INAKTIVITAETS_TIMEOUT - 2000) && !timeoutWarned) {
             Serial.println("CALL| Sende Timeout-Warnung...");
-            sip.rtp.playToneTimeout();
+            sip.rtp.playTimeout(); // Hier die neue Methode nutzen!
             timeoutWarned = true;
         }
 
-        if (dauerAktiv > INAKTIVITAETS_TIMEOUT) {
+        if (dauerAktiv > Timing::INAKTIVITAETS_TIMEOUT) {
             Serial.println("CALL| Timeout erreicht. Sende BYE...");
             sip.Bye(0);
             letzteAktivitaet = 0; 
-            sip.isConnected = false; // Sicherheitshalber hier auch resetten
+            sip.isConnected = false;
         }
 
     } else {
@@ -153,7 +154,8 @@ void loop() {
     // Zeitsteuerung Relais (Impuls)
     for (int i = 0; i < 10; i++) {
         if (relaisListe[i].aktiv) {
-            if (millis() - relaisListe[i].startMillis >= RELAIS_DAUER) {
+            // Nutze Timing::RELAIS_DAUER
+            if (millis() - relaisListe[i].startMillis >= Timing::RELAIS_DAUER) {
                 digitalWrite(relaisListe[i].pin, LOW);
                 relaisListe[i].aktiv = false;
                 Serial.printf("ACTION| Relais %d (GPIO %d) automatisch AUS.\n", i, relaisListe[i].pin);
