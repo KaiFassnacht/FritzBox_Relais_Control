@@ -1,31 +1,23 @@
-#include <Arduino.h>
-#include <ETH.h>
-#include <WiFiUdp.h>
-#include <MD5Builder.h>
 #include "sip.h"
+
 
 Sip::Sip(char *pBuf, size_t lBuf) {
     pbuf = pBuf;
     lbuf = lBuf;
-    pDialNr = "";
-    pDialDesc = "";
-    audioport[0] = '\0';
     iRingTime = 0;
-    callid = 0;
-    tagid = 0;
     lastDtmfDigit = 0;
 }
 
 void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd) {
-    udp.begin(SipPort);
     pSipIp = SipIp;
     iSipPort = SipPort;
     pSipUser = SipUser;
     pSipPassWd = SipPassWd;
     pMyIp = MyIp;
     iMyPort = MyPort;
-    iRingTime = 0;
-    Serial.printf("DEBUG| SIP Init: Port %d, Server: %s, MyIP: %s\n", SipPort, SipIp, MyIp);
+    
+    udp.begin(SipPort); 
+    rtp.begin(rtp_port); // Aus settings.h
 }
 
 void Sip::HandleUdpPacket() {
@@ -37,6 +29,17 @@ void Sip::HandleUdpPacket() {
     int len = udp.read(caSipIn, sizeof(caSipIn) - 1);
     caSipIn[len] = 0;
     char *p = caSipIn;
+
+    // --- NEUES DEBUGGING ---
+    if (strstr(p, "ACK sip:")) {
+        Serial.println(">>> DEBUG| ACK empfangen! Die FritzBox hat unser 200 OK akzeptiert.");
+        this->isConnected = true; // Setze ein Flag in sip.h (bool isConnected)
+    }
+
+    if (strstr(p, "SIP/2.0 481") || strstr(p, "SIP/2.0 408")) {
+        Serial.println(">>> DEBUG| FEHLER: FritzBox meldet Timeout oder unbekannten Dialog.");
+    }
+    // -----------------------
 
     Serial.println("\n>>> SIP EMPFANGEN:");
     Serial.println(p);
@@ -64,10 +67,18 @@ void Sip::HandleUdpPacket() {
 
     // --- 3. Eingehender Anruf (INVITE) ---
     else if (strstr(p, "INVITE sip:") == p) {
+        this->isConnected = false; // Reset für neuen Anruf
         Serial.println("DEBUG| EINGEHENDER ANRUF ERKANNT!");
         
         ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\r');
         if (strlen(caCallIdIn) == 0) ParseParameter(caCallIdIn, 128, "Call-ID: ", p, '\n');
+
+        char bufPort[8];
+        if (ParseParameter(bufPort, 8, "m=audio ", p, ' ')) {
+            uint16_t port = atoi(bufPort);
+            rtp.begin(10000); // Lokaler Port
+            rtp.setTarget(pSipIp, port);
+}
 
         // From Header extrahieren
         char* f = strstr(p, "From: ");
@@ -88,7 +99,8 @@ void Sip::HandleUdpPacket() {
             strncpy(caToIn, t + 4, tlen);
             caToIn[tlen] = 0;
         }
-
+        
+        iLastInCSeq = GrepInteger(p, "CSeq: "); // Speichere die CSeq der Fritzbox
         iRingTime = millis();
         Ok(p); // Den Anruf annehmen
     }
@@ -242,11 +254,45 @@ void Sip::Ok(const char *pIn) {
     AddSipLine("SIP/2.0 200 OK");
     AddCopySipLine(pIn, "Call-ID: ");
     AddCopySipLine(pIn, "CSeq: ");
-    AddCopySipLine(pIn, "From: ");
     AddCopySipLine(pIn, "Via: ");
-    AddCopySipLine(pIn, "To: ");
-    AddSipLine("Content-Length: 0");
-    AddSipLine("");
+    AddCopySipLine(pIn, "From: ");
+
+    // To-Header mit Tag (Wichtig für Session-Zuordnung)
+    char tempTo[128];
+    ParseParameter(tempTo, 128, "To: ", pIn, '\r');
+    if (!strstr(tempTo, ";tag=")) {
+        if (tempTo[strlen(tempTo)-1] == '>') tempTo[strlen(tempTo)-1] = '\0';
+        sprintf(caToIn, "%s>;tag=%010u", tempTo, tagid);
+    } else {
+        strcpy(caToIn, tempTo);
+    }
+    AddSipLine("To: %s", caToIn);
+    AddSipLine("Contact: <sip:%s@%s:%i>", pSipUser, pMyIp, iMyPort);
+    
+    if (strstr(pIn, "INVITE sip:")) {
+        // SDP Body vorbereiten
+        char sdp[256];
+        snprintf(sdp, sizeof(sdp), 
+            "v=0\r\n"
+            "o=- 0 0 IN IP4 %s\r\n"
+            "s=-\r\n"
+            "c=IN IP4 %s\r\n"
+            "t=0 0\r\n"
+            "m=audio 10000 RTP/AVP 8\r\n"
+            "a=rtpmap:8 PCMA/8000\r\n", 
+            pMyIp, pMyIp);
+
+        AddSipLine("Content-Type: application/sdp");
+        AddSipLine("Content-Length: %d", (int)strlen(sdp));
+        AddSipLine(""); // Header-Ende
+        strcat(pbuf, sdp);
+        Serial.println("DEBUG| Sende 200 OK mit SDP (Audio-Handshake)");
+    } else {
+        AddSipLine("Content-Length: 0");
+        AddSipLine("");
+        Serial.println("DEBUG| Sende 200 OK (ohne SDP)");
+    }
+
     SendUdp();
 }
 
@@ -319,30 +365,32 @@ void Sip::Cancel(int cseq) {
 }
 
 void Sip::Bye(int cseq) {
-    if (strlen(caCallIdIn) == 0) {
-        Serial.println("DEBUG| Bye abgebrochen: Keine Call-ID vorhanden.");
-        return;
-    }
+    if (strlen(caCallIdIn) == 0) return;
+
+    int useCSeq = (cseq > 0) ? cseq : iLastCSeq + 10;
 
     pbuf[0] = 0;
     AddSipLine("BYE sip:%s SIP/2.0", pSipIp);
     AddSipLine("Via: SIP/2.0/UDP %s:%i;branch=z9hG4bK%010u", pMyIp, iMyPort, Random());
     
-    // WICHTIG: From und To vom INVITE müssen gespiegelt werden
-    AddSipLine("From: %s", caToIn); 
+    // Falls caToIn leer geblieben ist (Sicherheitsnetz)
+    if (strlen(caToIn) < 5) {
+        AddSipLine("From: <sip:%s@%s:%i>;tag=%010u", pSipUser, pMyIp, iMyPort, tagid);
+    } else {
+        AddSipLine("From: %s", caToIn); 
+    }
+
     AddSipLine("To: %s", caFromIn);
     AddSipLine("Call-ID: %s", caCallIdIn);
-    
-    AddSipLine("CSeq: %i BYE", cseq);
+    AddSipLine("CSeq: %i BYE", useCSeq);
     AddSipLine("Max-Forwards: 70");
-    AddSipLine("User-Agent: WT32-ETH01");
     AddSipLine("Content-Length: 0");
     AddSipLine("");
     
     SendUdp();
     iRingTime = 0;
-    // Wir lassen caCallIdIn[0] = 0; hier weg, damit man zur Not mehrmals senden kann, 
-    // falls das erste Paket verloren geht.
+    caCallIdIn[0] = 0; 
 }
+
 
 const char* Sip::GetSIPServerIP() { return pSipIp; }

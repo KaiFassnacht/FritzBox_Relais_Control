@@ -1,6 +1,8 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
+#include <Arduino.h>
+
 // --- Hardware Pins (Definition der verfügbaren GPIOs) ---
 #define PIN_A  2
 #define PIN_B  4
@@ -14,7 +16,7 @@
 // --- Tasten-Zuweisung (Mapping) ---
 // Index 0 ist Taste '0', Index 1 ist Taste '1', usw.
 // Hier kannst du nun beliebig schieben:
-const int TASTEN_MAP[10] = {
+inline const int TASTEN_MAP[10] = {
     PIN_A,  // Taste '0' -> GPIO 2
     PIN_B,  // Taste '1' -> GPIO 4
     PIN_C,  // Taste '2' -> GPIO 12
@@ -29,13 +31,18 @@ const int TASTEN_MAP[10] = {
 
 // --- Zeitsteuerung ---
 #define RELAIS_DAUER 3000   // Zeit in ms
-#define INAKTIVITAETS_TIMEOUT 10000 // 10 Sekunden in ms
+#define INAKTIVITAETS_TIMEOUT 5000 // 10 Sekunden in ms
 
 
 // --- SIP Einstellungen ---
-const char* sip_user = "Relaisgateway";
-const char* sip_password = "Relaisgateway112";
-const char* fritzbox_ip = "192.168.3.1";
-const int sip_port = 5060;
+inline const char* sip_user = "<sip user>>";
+inline const char* sip_password = "<passwort>";
+inline const char* fritzbox_ip = "<Fritzbox IP>";
+inline const int sip_port = 5060;
+inline const int rtp_port = 10002;
+
+
+
+
 
 #endif
