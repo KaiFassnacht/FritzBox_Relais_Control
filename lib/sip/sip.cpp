@@ -147,13 +147,28 @@ void Sip::HandleUdpPacket() {
         
         // Suche nach "Signal=" im Body der Nachricht
         char* s = strstr(p, "Signal=");
+
         if (s) {
             // Pointer auf das Zeichen nach "Signal=" setzen
             char* digitPtr = s + 7;
-            // Eventuelle Leerzeichen überspringen
             while (*digitPtr == ' ') digitPtr++;
+ 
+            char taste = *digitPtr;
+            Serial.printf("DEBUG| Taste erkannt: %c\n", taste);
+
+            // --- NEU: Auflegen bei # ---
+            if (taste == '#') {
+                Serial.println("ACTION| '#' erkannt. Beende Gespräch...");
+                // Wir antworten erst mit 200 OK auf das INFO-Paket (SIP-Standard)
+                Ok(p); 
+                // Dann senden wir aktiv das BYE
+                Bye(0); 
+                return; // Methode verlassen, da Gespräch beendet
+            }
+            // ---------------------------
+            // Eventuelle Leerzeichen überspringen
+            lastDtmfDigit = taste;
             
-            lastDtmfDigit = *digitPtr; 
             Serial.printf("DEBUG| Taste erkannt: %c\n", lastDtmfDigit);
         }
         
