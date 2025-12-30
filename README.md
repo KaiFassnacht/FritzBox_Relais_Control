@@ -9,15 +9,14 @@ Dieses Projekt verwandelt einen **WT32-ETH01** (ESP32 mit Ethernet) in ein SIP-E
 ## 🚀 Features
 
 * **Native SIP-Stack**: Registrierung direkt als IP-Telefon an der FRITZ!Box.
-* **Ethernet-Support**: Stabile Verbindung über den WT32-ETH01 (LAN statt WLAN).
+* **Ethernet-Support**: Maximale Stabilität über LAN (statt störanfälligem WLAN).
 * **DTMF-Steuerung**: Auswertung von Tastentönen (SIP INFO) zur Relais-Steuerung.
-* **Audio-Feedback**: Akustische Quittierung durch generierte Sinustöne (PCMA/G.711a).
-* **Automatischer Impuls-Modus**: Relais schalten nach einer definierbaren Dauer automatisch ab.
-* **Sicherheits-Handshake**: Prüft auf SIP-ACK vor dem Audio-Versand, um Puffer-Überläufe zu verhindern.
-* **Inaktivitäts-Timeout**: Automatisches Auflegen bei fehlender Eingabe.
-* **Taste #: Beendet das**:  Gespräch sofort (Sofortiges BYE).
-* **Audio-Feedback**: Jede Aktion wird durch eine spezifische Tonfolge (RTP-Stream) im Hörer bestätigt.
-
+* **Mehrstufige Sicherheit**:
+    * **Rufnummern-Whitelist**: Schalten nur von autorisierten Nummern (Caller ID) möglich.
+    * **Individuelle PINs**: Jede Taste kann eine eigene, unterschiedlich lange PIN besitzen.
+* **Modernes Audio-Feedback**: Akustische Quittierung durch professionelle Tonsequenzen (RTP/G.711a).
+* **Automatischer Impuls-Modus**: Relais schalten nach Ablauf der `RELAIS_DAUER` automatisch ab.
+* **Sofort-Beenden**: Taste `#` beendet das Gespräch sofort (Sofortiges `BYE`).
 ---
 
 ## 🛠 Hardwareanforderungen
@@ -28,15 +27,27 @@ Dieses Projekt verwandelt einen **WT32-ETH01** (ESP32 mit Ethernet) in ein SIP-E
 
 ---
 
+## 🛡️ Sicherheits-Konzept
+
+Das Gateway bietet zwei Schutzebenen, die in der `settings.h` pro Taste konfiguriert werden:
+
+1.  **Whitelist-Prüfung**: Das System extrahiert die Anrufernummer (z. B. `**611` oder Handynummer). Ist die Whitelist für eine Taste aktiv, werden Eingaben von nicht autorisierten Nummern ignoriert.
+2.  **PIN-Autorisierung**: Bei geschützten Tasten fordert das Gateway mit einer speziellen Tonfolge zur PIN-Eingabe auf. Erst nach korrekter Eingabe wird das Relais geschaltet.
+
+
+
+---
+
 ## 📋 Konfiguration & Parameter
 
-Die grundlegenden Einstellungen werden in der `settings.h` vorgenommen. Du kannst das Verhalten über folgende Parameter feinjustieren:
+Die grundlegenden Einstellungen werden in der `include/settings.h` vorgenommen:
 
 | Parameter | Beschreibung | Standardwert |
 | :--- | :--- | :--- |
 | `RELAIS_DAUER` | Zeit, die das Relais angezogen bleibt | 1000 ms |
 | `INAKTIVITAETS_TIMEOUT` | Automatisches Auflegen nach Inaktivität | 60000 ms |
-| `SIP_PORT` | Lokaler Port für die SIP-Kommunikation | 5060 |
+| `WHITELIST` | Liste der erlaubten Rufnummern | `{"**611", ...}` |
+| `PINS[10]` | Array mit PINs für die Tasten 0-9 | `{"", "1234", ...}` |
 
 Du kannst das Verhalten des Gateways über diese Parameter feinjustieren:
 •	RELAIS_DAUER: Zeit in Millisekunden, die das Relais angezogen bleibt (Standard: 1000).
@@ -49,11 +60,13 @@ Du kannst das Verhalten des Gateways über diese Parameter feinjustieren:
 ## 🏗 Funktionsweise
 
 1.  **Boot**: ESP32 baut Ethernet-Verbindung auf und registriert sich an der FRITZ!Box.
-2.  **Anruf**: Bei eingehendem Ruf sendet das Gateway `200 OK` mit SDP-Payload.
-3.  **Handshake**: Gateway wartet auf das `ACK` der FRITZ!Box zur RTP-Synchronisation.
-4.  **Steuerung**: Benutzer drückt Taste (z.B. '1') -> FRITZ!Box sendet `SIP INFO` -> Gateway schaltet GPIO und spielt Quittungston.
-5.  **Ende**: Gespräch endet durch Auflegen oder Timeout.
-
+2.  **Anruf**: Gateway prüft Caller-ID und sendet bei Annahme ein Bereit-Signal.
+3.  **Wahl**: Benutzer drückt eine Taste (z.B. '2').
+4.  **Validierung**:
+    * Prüfung: Ist die Caller-ID für diese Taste autorisiert?
+    * Prüfung: Ist eine PIN erforderlich? (Falls ja: Warte auf PIN-Eingabe).
+5.  **Aktion**: GPIO schaltet -> Quittungston wird abgespielt.
+6.  **Ende**: Gespräch endet durch `#`, Auflegen des Anrufers oder Inaktivitäts-Timeout.
 
 
 ---
@@ -75,14 +88,16 @@ Um private Zugangsdaten zu schützen, nutzt dieses Projekt ein Vorlagen-System:
 
 ---
 
-## ⌨️ Bedienung & Feedback
+## ⌨️ Bedienung & Akustisches Feedback
 
-| Taste | Aktion | Audio-Feedback | Beschreibung |
+| Signal | Aktion / Zustand | Audio-Feedback | Beschreibung |
 | :--- | :--- | :--- | :--- |
-| **Anruf** | Verbindung | Hoher Doppel-Piep | System ist bereit für Eingaben. |
-| **0 - 9** | Schalten | Kurzer Bestätigungston | Relais wird aktiviert. |
-| **# / *** | Keine | Tiefer Fehlerton | Taste nicht belegt. |
-| **Timeout** | Warnung | Langer Intervallton | Automatische Trennung in 2 Sek. |
+| **Start-Ton** | Verbindung steht | Hoher Doppel-Piep | System bereit für Eingaben. |
+| **PIN-Request** | PIN erforderlich | Zwei ansteigende Töne | Aufforderung zur PIN-Eingabe. |
+| **OK-Ton** | Schalten erfolgreich | Kurzer Bestätigungston | Relais wurde aktiviert. |
+| **Error-Ton** | Fehler / Sperre | Tiefer Fehlerton | PIN falsch oder Whitelist-Sperre. |
+| **Timeout** | Warnung | Rhythmische Impulse | Automatisches Auflegen in 2 Sek. |
+| **Taste #** | Auflegen | - | Sofortige Trennung der Leitung. |
 
 ---
 
