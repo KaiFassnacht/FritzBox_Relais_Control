@@ -15,6 +15,8 @@ Dieses Projekt verwandelt einen **WT32-ETH01** (ESP32 mit Ethernet) in ein SIP-E
 * **Automatischer Impuls-Modus**: Relais schalten nach einer definierbaren Dauer automatisch ab.
 * **Sicherheits-Handshake**: Prüft auf SIP-ACK vor dem Audio-Versand, um Puffer-Überläufe zu verhindern.
 * **Inaktivitäts-Timeout**: Automatisches Auflegen bei fehlender Eingabe.
+* **Taste #: Beendet das**:  Gespräch sofort (Sofortiges BYE).
+* **Audio-Feedback**: Jede Aktion wird durch eine spezifische Tonfolge (RTP-Stream) im Hörer bestätigt.
 
 ---
 
