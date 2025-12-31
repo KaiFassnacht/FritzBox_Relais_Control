@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Konfiguration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="btn-back">← Zurück zum Menü</a>
+        
+        <h1>Audio Signale</h1>
+        <p style="font-size: 0.85em; color: #666; margin-bottom: 20px;">
+            Hinweis: Diese Einstellungen werden sofort übernommen und erfordern keinen Neustart.
+        </p>
+        
+        <form action="/save-audio" method="POST">
+            <div class="section">
+                <div class="table-responsive">
+                    <table class="audio-table">
+                        <thead>
+                            <tr>
+                                <th>Signal / Schritt</th>
+                                <th>Frequenz (Hz)</th>
+                                <th>Dauer (ms)</th>
+                                <th>Pause (ms)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            %AUDIO_TABLE%
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn">Audio-Einstellungen speichern</button>
+        </form>
+
+        <div id="status-msg" style="display:none;"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

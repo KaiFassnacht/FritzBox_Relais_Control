@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netzwerk-Konfiguration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="btn-back">← Zurück zum Menü</a>
+        <h1>SIP & Netzwerk</h1>
+        <form action="/save" method="POST">
+            <div class="section">
+                <div class="input-row">
+                    <div class="inline-group">
+                        <label>Registrar:</label>
+                        <input type="text" name="sipReg" value="%SIPREG%">
+                    </div>
+                    <div class="inline-group small">
+                        <label>SIP Port:</label>
+                        <input type="number" name="sipPort" value="%SIPPORT%">
+                    </div>
+                    <div class="inline-group small">
+                        <label>RTP Port:</label>
+                        <input type="number" name="rtpPort" value="%RTPPORT%">
+                    </div>
+                </div>
+                <div class="input-row">
+                    <div class="inline-group">
+                        <label>Benutzer:</label>
+                        <input type="text" name="sipUser" value="%SIPUSER%">
+                    </div>
+                    <div class="inline-group">
+                        <label>Passwort:</label>
+                        <input type="password" name="sipPass" value="%SIPPASS%">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn">Speichern & Neustart</button>
+        </form>
+        <div id="status-msg" style="display:none;"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

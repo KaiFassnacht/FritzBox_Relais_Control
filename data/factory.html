@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Werkseinstellungen</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="btn-back">← Zurück zum Menü</a>
+        <h1>System zurücksetzen</h1>
+        <div class="section" style="background:#fff5f5; border:2px solid #ffcccc; text-align:center;">
+            <h3 style="color:#d9534f;">GEFAHRENBEREICH</h3>
+            <p>Alle Einstellungen (SIP, PINs, Audio) werden gelöscht und auf Standardwerte zurückgesetzt.</p>
+            <button onclick="factoryReset()" class="btn" style="background:#d9534f;">Werkseinstellungen laden</button>
+        </div>
+    </div>
+    <script>
+    function factoryReset() {
+        if (confirm("Sind Sie sicher? Das Gateway startet komplett leer neu!")) {
+            fetch('/factory-reset', { method: 'POST' })
+            .then(() => {
+                alert("Reset erfolgreich. Bitte warten Sie 10 Sekunden auf den Neustart.");
+                window.location.href = '/';
+            });
+        }
+    }
+    </script>
+</body>
+</html>

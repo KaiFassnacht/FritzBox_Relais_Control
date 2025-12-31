@@ -3,6 +3,12 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 
+struct ToneConfig {
+    uint16_t freq;
+    uint16_t duration;
+    uint16_t pause;
+};
+
 struct GatewayConfig {
     char sipUser[32] = "611";
     char sipPass[32] = "password";
@@ -20,6 +26,46 @@ struct GatewayConfig {
     
     uint32_t relaisDauer = 1000;
     uint32_t timeout = 60000;
+
+    // OK-Ton: 2 Schritte
+    ToneConfig toneOk[2] = {
+        {660, 150, 20}, 
+        {880, 150, 0}
+    };
+
+    // Error-Ton: 2 Schritte
+    ToneConfig toneErr[2] = {
+        {300, 200, 20}, 
+        {200, 200, 0}
+    };
+
+    // Alarm: 3 Schritte (Sirene)
+    ToneConfig toneAlarm[3] = {
+        {1000, 80, 0}, 
+        {800, 80, 0}, 
+        {600, 80, 0}
+    };
+
+    // Start-Ton: 1 Schritt
+    ToneConfig toneStart[1] = {
+        {440, 200, 0}
+    };
+
+    // Timeout: 4 Schritte (2 Schläge, jeweils wiederholt)
+    ToneConfig toneTimeout[4] = {
+        {150, 60, 100}, 
+        {150, 60, 0},
+        {150, 60, 100}, 
+        {150, 60, 0}
+    };
+
+    // Pin-Request: 4 Schritte (Zweistufiger Hinweiston, wiederholt)
+    ToneConfig tonePinRequest[4] = {
+        {880, 80, 40}, 
+        {1046, 120, 0},
+        {880, 80, 40}, 
+        {1046, 120, 0}
+    };
 };
 
 extern GatewayConfig config;

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relais-Konfiguration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="btn-back">← Zurück zum Menü</a>
+        <h1>Relais & Sicherheit</h1>
+        <form action="/save" method="POST">
+            <div class="section">
+                <h3>GPIO & PIN Belegung</h3>
+                <table>
+                    <thead>
+                        <tr><th>Taste</th><th>GPIO</th><th>PIN</th><th>Whitelist</th></tr>
+                    </thead>
+                    <tbody>
+                        %RELAIS_TABLE%
+                    </tbody>
+                </table>
+            </div>
+             <div class="section">
+                <h3>Sicherheit</h3>
+                 <p>
+                    <label>Whitelist (Komma-getrennt):</label>
+                    <input type="text" name="whitelist" value="%WHITELIST%">
+                </p>
+            </div>
+            <div class="section">
+                <h3>Zeit-Einstellungen</h3>
+                <p>Relais-Einschaltdauer (ms):<br>
+                    <input type="number" name="relDur" value="%RELDUR%" min="100" max="30000">
+                </p>
+                <p>Anruf-Timeout (ms):<br>
+                    <input type="number" name="tout" value="%TIMEOUT%" min="5000" max="3600000">
+                </p>
+            </div>
+            <button type="submit" class="btn">Speichern & Neustart</button>
+        </form>
+        <div id="status-msg" style="display:none;"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

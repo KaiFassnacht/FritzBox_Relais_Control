@@ -32,11 +32,51 @@ void RtpAudio::sendPacket(const uint8_t* payload, size_t size) {
     _timestamp += size;
 }
 
+void RtpAudio::playSequenceInternal(const ToneConfig* steps, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (steps[i].freq > 0) {
+            playTone(steps[i].freq, steps[i].duration);
+        }
+        if (steps[i].pause > 0) {
+            delay(steps[i].pause);
+        }
+    }
+}
+
+// --- Wrapper für die einzelnen Töne ---
+
+void RtpAudio::playToneOk() {
+    playSequenceInternal(config.toneOk, 2);
+}
+
+void RtpAudio::playToneErr() {
+    playSequenceInternal(config.toneErr, 2);
+}
+
+void RtpAudio::playToneAlarm() {
+    playSequenceInternal(config.toneAlarm, 3);
+}
+
+void RtpAudio::playToneStart() {
+    playSequenceInternal(config.toneStart, 1);
+}
+
+void RtpAudio::playToneTimeout() {
+    playSequenceInternal(config.toneTimeout, 4);
+}
+
+void RtpAudio::playPinRequest() {
+    playSequenceInternal(config.tonePinRequest, 4);
+}
+
 void RtpAudio::playTone(float frequency, int durationMs) {
     if (_remotePort == 0) return;
     const int samplesPerPacket = 160; 
     uint8_t audioBuf[samplesPerPacket];
+    
+    // Sicherstellen, dass mindestens 1 Paket gesendet wird
     int numPackets = durationMs / 20;
+    if (numPackets < 1) numPackets = 1; 
 
     uint32_t nextTick = millis();
 
@@ -54,11 +94,19 @@ void RtpAudio::playTone(float frequency, int durationMs) {
     }
 }
 
-void RtpAudio::playSequenceInternal(const ToneStep* steps, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-        playTone(steps[i].freq, steps[i].duration);
-        if (steps[i].pause > 0) {
-            delay(steps[i].pause);
-        }
+// A-Law Encoding für G.711 (RTP Standard für Telefonie)
+uint8_t RtpAudio::ALaw_Encode(int16_t number) {
+    uint16_t mask = 0x800;
+    uint8_t sign = 0;
+    uint8_t position;
+    uint8_t lsb;
+    if (number < 0) {
+        number = -number;
+        sign = 0x80;
     }
+    number += 128;
+    if (number > 32767) number = 32767;
+    for (position = 7; ((number & mask) != mask) && (position > 0); position--) mask >>= 1;
+    lsb = (number >> (position + 4)) & 0x0f;
+    return (~(sign | (position << 4) | lsb) ^ 0x55);
 }

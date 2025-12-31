@@ -115,3 +115,78 @@ h3 {
     border-radius: 4px; 
     text-align: center;
 }
+
+/* Spezifisches Styling für die Audio-Tabelle */
+.audio-table {
+    font-size: 0.9em;
+}
+
+.audio-table th {
+    background: #444;
+    color: white;
+    text-align: center;
+}
+
+.audio-table td {
+    padding: 5px;
+}
+
+.audio-table tr[style*="background"] th {
+    text-align: left;
+    padding-left: 10px;
+    color: #333;
+    font-size: 1em;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* Optimierung der Nummer-Inputs in Tabellen */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.btn-back {
+    display: inline-block;
+    margin-bottom: 20px;
+    text-decoration: none;
+    color: #007bff;
+    font-weight: bold;
+}
+.btn-back:hover {
+    text-decoration: underline;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+}
+.menu-btn {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #333;
+    transition: all 0.2s;
+}
+.menu-btn:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+    transform: translateY(-2px);
+}
+.menu-btn strong { color: #007bff; font-size: 1.1em; margin-bottom: 5px; }
+.menu-btn span { font-size: 0.85em; color: #666; }
+.menu-btn.danger strong { color: #d9534f; }
+
+@media (max-width: 600px) { .menu-grid { grid-template-columns: 1fr; } }

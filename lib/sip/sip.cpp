@@ -35,7 +35,7 @@
    ====================================================================*/
 
 #include "sip.h"
-#include "settings.h"
+//#include "settings.h"
 
 Sip::Sip(char *pBuf, size_t lBuf) {
     pbuf = pBuf;
