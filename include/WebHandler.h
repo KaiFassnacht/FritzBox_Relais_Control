@@ -15,6 +15,8 @@ private:
 
     // Definiert die Routen (/, /save, /hello)
     void setupRoutes();
+    // Neue Hilfsmethoden für den Datei-Transfer
+    void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 };
 
 // Der Processor muss außerhalb der Klasse deklariert sein, 

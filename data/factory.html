@@ -3,19 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Werkseinstellungen</title>
+    <title>Werkseinstellungen & Backup</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <a href="/" class="btn-back">← Zurück zum Menü</a>
-        <h1>System zurücksetzen</h1>
-        <div class="section" style="background:#fff5f5; border:2px solid #ffcccc; text-align:center;">
+        <h1>System & Konfiguration</h1>
+
+        <div class="section" style="background:#f0f7ff; border:1px solid #b8daff;">
+            <h3>Konfiguration Sichern & Laden</h3>
+            <p>Sichern Sie Ihre Einstellungen als Datei oder laden Sie ein Backup hoch.</p>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+                <a href="/download-config" class="btn" style="background:#28a745; text-decoration:none; flex: 1; text-align: center;">Backup herunterladen</a>
+                
+                <div style="flex: 1; min-width: 200px;">
+                    <input type="file" id="configFile" accept=".json" style="display: none;" onchange="uploadConfig()">
+                    <button onclick="document.getElementById('configFile').click()" class="btn" style="background:#007bff; width: 100%;">Backup einspielen</button>
+                </div>
+            </div>
+            <div id="status-msg" style="display:none; margin-top: 15px; padding: 10px; border-radius: 4px; text-align: center;"></div>
+        </div>
+
+        <div class="section" style="background:#fff5f5; border:2px solid #ffcccc; text-align:center; margin-top: 30px;">
             <h3 style="color:#d9534f;">GEFAHRENBEREICH</h3>
             <p>Alle Einstellungen (SIP, PINs, Audio) werden gelöscht und auf Standardwerte zurückgesetzt.</p>
             <button onclick="factoryReset()" class="btn" style="background:#d9534f;">Werkseinstellungen laden</button>
         </div>
     </div>
+
+    <script src="script.js"></script>
     <script>
     function factoryReset() {
         if (confirm("Sind Sie sicher? Das Gateway startet komplett leer neu!")) {

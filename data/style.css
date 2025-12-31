@@ -4,6 +4,7 @@ body {
     margin: 20px; 
     background: #f4f4f4; 
     color: #333; 
+    line-height: 1.5;
 }
 
 .container { 
@@ -20,6 +21,37 @@ h1 {
     border-bottom: 2px solid #eee; 
     padding-bottom: 10px; 
 }
+
+/* Hauptmenü (Grid Layout) */
+.menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.menu-btn {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #333;
+    transition: all 0.2s ease;
+}
+
+.menu-btn:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+
+.menu-btn strong { color: #007bff; font-size: 1.1em; margin-bottom: 5px; }
+.menu-btn span { font-size: 0.85em; color: #666; }
+.menu-btn.danger strong { color: #d9534f; }
 
 /* Tabellen-Styling */
 table { 
@@ -38,38 +70,35 @@ th {
     background: #f8f9fa; 
 }
 
-/* Allgemeine Input-Styles */
+/* Formular & Input-Styles */
 input[type="text"], 
 input[type="number"], 
-input[type="password"] { 
-    width: 100%; /* Geändert von calc, Steuerung erfolgt über Container */
-    padding: 8px; 
+input[type="password"],
+input[type="file"] { 
+    width: 100%; 
+    padding: 10px; 
     border: 1px solid #ccc; 
     border-radius: 4px; 
-    box-sizing: border-box; /* Wichtig, damit Padding die Breite nicht sprengt */
+    box-sizing: border-box; 
 }
 
-/* Layout für die Zeilen (Neu) */
 .input-row {
     display: flex;
     gap: 15px;
     margin-bottom: 15px;
-    flex-wrap: wrap; /* Bricht auf schmalen Bildschirmen automatisch um */
+    flex-wrap: wrap;
 }
 
-/* Gruppe aus Label und Input (Neu) */
 .inline-group {
-    flex: 2; /* Nimmt proportional Platz ein */
+    flex: 2;
     display: flex;
     flex-direction: column;
 }
 
-/* Spezielle Breite für kleine Felder wie Ports (Neu) */
 .inline-group.small {
-    flex: 0 0 100px; /* Feste Basisbreite von 100px */
+    flex: 0 0 100px;
 }
 
-/* Labels über den Feldern (Neu) */
 label {
     font-size: 0.85em;
     font-weight: bold;
@@ -77,7 +106,7 @@ label {
     color: #555;
 }
 
-/* Button & Sektionen */
+/* Buttons */
 .btn { 
     padding: 12px 24px; 
     background: #28a745; 
@@ -86,71 +115,13 @@ label {
     border-radius: 4px; 
     cursor: pointer; 
     font-size: 16px; 
-    width: 100%; /* Button über die volle Breite auf Mobilgeräten praktisch */
+    width: 100%; 
     margin-top: 10px;
+    font-weight: bold;
+    transition: background 0.2s;
 }
 
-.btn:hover {
-    background: #218838;
-}
-
-.section { 
-    margin-bottom: 30px; 
-    padding: 15px;
-    border: 1px solid #f0f0f0;
-    border-radius: 6px;
-}
-
-h3 {
-    margin-top: 0;
-    color: #444;
-}
-
-/* Statusmeldung */
-#status-msg {
-    margin-top: 20px; 
-    padding: 15px; 
-    background: #e2f3ff; 
-    border: 1px solid #b8daff; 
-    border-radius: 4px; 
-    text-align: center;
-}
-
-/* Spezifisches Styling für die Audio-Tabelle */
-.audio-table {
-    font-size: 0.9em;
-}
-
-.audio-table th {
-    background: #444;
-    color: white;
-    text-align: center;
-}
-
-.audio-table td {
-    padding: 5px;
-}
-
-.audio-table tr[style*="background"] th {
-    text-align: left;
-    padding-left: 10px;
-    color: #333;
-    font-size: 1em;
-}
-
-.table-responsive {
-    overflow-x: auto;
-}
-
-/* Optimierung der Nummer-Inputs in Tabellen */
-input[type="number"] {
-    -moz-appearance: textfield;
-}
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
+.btn:hover { background: #218838; }
 
 .btn-back {
     display: inline-block;
@@ -159,34 +130,47 @@ input::-webkit-inner-spin-button {
     color: #007bff;
     font-weight: bold;
 }
-.btn-back:hover {
-    text-decoration: underline;
+
+.btn-back:hover { text-decoration: underline; }
+
+/* Sektionen & Gefahrenbereich */
+.section { 
+    margin-bottom: 30px; 
+    padding: 15px;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
 }
 
-.menu-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-top: 20px;
+.section.danger {
+    background: #fff5f5;
+    border: 2px solid #ffcccc;
 }
-.menu-btn {
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    text-decoration: none;
-    color: #333;
-    transition: all 0.2s;
-}
-.menu-btn:hover {
-    background: #e9ecef;
-    border-color: #007bff;
-    transform: translateY(-2px);
-}
-.menu-btn strong { color: #007bff; font-size: 1.1em; margin-bottom: 5px; }
-.menu-btn span { font-size: 0.85em; color: #666; }
-.menu-btn.danger strong { color: #d9534f; }
 
-@media (max-width: 600px) { .menu-grid { grid-template-columns: 1fr; } }
+/* Statusmeldungen */
+#status-msg {
+    margin-top: 20px; 
+    padding: 15px; 
+    background: #e2f3ff; 
+    border: 1px solid #b8daff; 
+    border-radius: 4px; 
+    text-align: center;
+    font-weight: bold;
+    display: none; /* Wird via JS aktiviert */
+}
+
+/* Audio & Tabellen Optimierung */
+.table-responsive { overflow-x: auto; }
+
+.audio-table th { background: #444; color: white; text-align: center; }
+.audio-table td { padding: 8px; }
+
+/* Entfernt Pfeile bei Nummer-Inputs */
+input[type="number"] { -moz-appearance: textfield; }
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Responsive Anpassungen */
+@media (max-width: 600px) { 
+    .menu-grid { grid-template-columns: 1fr; }
+    .input-row { flex-direction: column; gap: 10px; }
+}

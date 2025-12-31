@@ -105,6 +105,25 @@ void WebHandler::setupRoutes() {
         request->send(LittleFS, "/script.js", "application/javascript");
     });
 
+    server.on("/download-config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (LittleFS.exists("/config.json")) {
+            // "true" am Ende erzwingt den Download-Dialog im Browser
+            request->send(LittleFS, "/config.json", "application/json", true);
+        } else {
+            request->send(404, "text/plain", "Konfiguration nicht gefunden.");
+        }
+    });
+
+    // Konfiguration uploaden
+    server.on("/upload-config", HTTP_POST, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Upload erfolgreich. System startet neu...");
+        delay(1000);
+        ESP.restart();
+    }, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        this->handleUpload(request, filename, index, data, len, final);
+    });
+
+
     server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
         // 1. SIP & Ports (mit hasParam)
         if (request->hasParam("sipReg", true)) strlcpy(config.sipRegistrar, request->getParam("sipReg", true)->value().c_str(), 63);
@@ -217,4 +236,25 @@ void WebHandler::setupRoutes() {
             ESP.restart();
         });
     });
+}
+
+// Die Implementierung der Upload-Logik
+void WebHandler::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    static File uploadFile;
+    
+    if (!index) { // Erster Block der Datei
+        Serial.printf("CFG| Upload Start: %s\n", filename.c_str());
+        // Wir speichern alles als /config.json, egal wie die Datei am PC hieß
+        uploadFile = LittleFS.open("/config.json", "w");
+        if(!uploadFile) Serial.println("CFG| FEHLER: Konnte Datei nicht zum Schreiben öffnen!");
+    }
+    
+    if (uploadFile) {
+        uploadFile.write(data, len);
+    }
+    
+    if (final) { // Letzter Block
+        if (uploadFile) uploadFile.close();
+        Serial.println("CFG| Upload fertig!");
+    }
 }
