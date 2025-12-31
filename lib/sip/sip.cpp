@@ -46,16 +46,17 @@ Sip::Sip(char *pBuf, size_t lBuf) {
     caCallerNr[0] = 0;
 }
 
-void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd) {
+void Sip::Init(const char *SipIp, int SipPort, const char *MyIp, int MyPort, const char *SipUser, const char *SipPassWd, int pRtpPort) {
     pSipIp = SipIp;
     iSipPort = SipPort;
     pSipUser = SipUser;
     pSipPassWd = SipPassWd;
     pMyIp = MyIp;
     iMyPort = MyPort;
-    
-    udp.begin(iSipPort); 
-    rtp.begin(SipConfig::RTP_PORT);
+    iRtpPort = pRtpPort;
+
+    udp.begin(iMyPort); 
+    rtp.begin(iRtpPort);
 }
 
 void Sip::HandleUdpPacket() {
@@ -114,10 +115,9 @@ void Sip::HandleUdpPacket() {
         char bufPort[8];
         if (ParseParameter(bufPort, 8, "m=audio ", p, ' ')) {
             uint16_t port = atoi(bufPort);
-            rtp.begin(SipConfig::RTP_PORT); 
+            rtp.begin(iRtpPort); 
             rtp.setTarget(pSipIp, port);
-}
-
+        }
         // From Header extrahieren
         char* f = strstr(p, "From: ");
         if (f) {
@@ -267,7 +267,7 @@ void Sip::Invite(const char *pIn) {
     AddSipLine("Content-Length: 120");
     AddSipLine("");
     AddSipLine("v=0\r\no=- 0 0 IN IP4 %s\r\ns=-\r\nc=IN IP4 %s\r\nt=0 0\r\nm=audio %d RTP/AVP 8\r\na=rtpmap:8 PCMA/8000", 
-               pMyIp, pMyIp, SipConfig::RTP_PORT); 
+               pMyIp, pMyIp, iRtpPort); 
     SendUdp();
 }
 
@@ -361,7 +361,7 @@ void Sip::Ok(const char *pIn) {
             "t=0 0\r\n"
             "m=audio %d RTP/AVP 8\r\n"
             "a=rtpmap:8 PCMA/8000\r\n", 
-            pMyIp, pMyIp, SipConfig::RTP_PORT);
+            pMyIp, pMyIp, iRtpPort);
             
         AddSipLine("Content-Type: application/sdp");
         AddSipLine("Content-Length: %d", (int)strlen(sdp));

@@ -128,7 +128,7 @@ void setup() {
 
     strncpy(myIPAddress, ETH.localIP().toString().c_str(), 15);
     
-    sip.Init(config.sipRegistrar, config.sipPort, myIPAddress, config.sipPort, config.sipUser, config.sipPass);
+    sip.Init(config.sipRegistrar, config.sipPort, myIPAddress, config.sipPort, config.sipUser, config.sipPass, config.rtpPort);
 
     Serial.println("\nSYSTEM| SIP Gateway bereit.");
     sip.Register();
@@ -274,16 +274,17 @@ void loop() {
         }
     }
 
-    // Impuls-Steuerung aus Config
+    // Impuls-Steuerung am Ende der loop()
     for (int i = 0; i < 10; i++) {
         if (relaisListe[i].aktiv) {
             if (millis() - relaisListe[i].startMillis >= config.relaisDauer) {
-                digitalWrite(relaisListe[i].pin, LOW);
+                if (relaisListe[i].pin != -1) { // <--- Kleiner Sicherheits-Check
+                    digitalWrite(relaisListe[i].pin, LOW);
+                }
                 relaisListe[i].aktiv = false;
             }
         }
     }
-
     if (millis() - lastRegister > 240000) {
         sip.Register();
         lastRegister = millis();
