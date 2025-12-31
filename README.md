@@ -17,6 +17,7 @@ Dieses Projekt verwandelt einen **WT32-ETH01** (ESP32 mit Ethernet) in ein SIP-E
 * **Modernes Audio-Feedback**: Akustische Quittierung durch professionelle Tonsequenzen (RTP/G.711a).
 * **Automatischer Impuls-Modus**: Relais schalten nach Ablauf der `RELAIS_DAUER` automatisch ab.
 * **Sofort-Beenden**: Taste `#` beendet das Gespräch sofort (Sofortiges `BYE`).
+* **Web-GUI**: Webserver um alle Einstellungen zu ändern
 ---
 
 ## 🛠 Hardwareanforderungen
@@ -40,20 +41,7 @@ Das Gateway bietet zwei Schutzebenen, die in der `settings.h` pro Taste konfigur
 
 ## 📋 Konfiguration & Parameter
 
-Die grundlegenden Einstellungen werden in der `include/settings.h` vorgenommen:
-
-| Parameter | Beschreibung | Standardwert |
-| :--- | :--- | :--- |
-| `RELAIS_DAUER` | Zeit, die das Relais angezogen bleibt | 1000 ms |
-| `INAKTIVITAETS_TIMEOUT` | Automatisches Auflegen nach Inaktivität | 60000 ms |
-| `WHITELIST` | Liste der erlaubten Rufnummern | `{"**611", ...}` |
-| `PINS[10]` | Array mit PINs für die Tasten 0-9 | `{"", "1234", ...}` |
-
-Du kannst das Verhalten des Gateways über diese Parameter feinjustieren:
-•	RELAIS_DAUER: Zeit in Millisekunden, die das Relais angezogen bleibt (Standard: 1000).
-•	INAKTIVITAETS_TIMEOUT: Zeit in Millisekunden, nach der das Gateway bei Inaktivität auflegt (Standard: 60000).
-•	SIP_PORT: Der lokale Port für die SIP-Kommunikation (Standard: 5060).
-
+Die grundlegenden Einstellungen werden im Web-GUI vorgenommen
 
 ---
 
@@ -74,17 +62,10 @@ Du kannst das Verhalten des Gateways über diese Parameter feinjustieren:
 ## 💻 Installation
 
 1. **Projekt öffnen**: Öffnen Sie den Projektordner in **PlatformIO** (VS Code).
-2. **Konfiguration**: Benennen Sie die `include/settings_example.h` in `include/settings.h` um und passen Sie die SIP-Daten sowie die Pin-Belegung an Ihre Umgebung an.
-3. **FRITZ!Box einrichten**: Legen Sie in der FRITZ!Box ein neues **IP-Telefon** an. Wichtig: Benutzername und Passwort müssen exakt mit den Einträgen in der `settings.h` übereinstimmen.
-4. **Upload**: Schließen Sie den WT32-ETH01 an und starten Sie den **Upload** über PlatformIO.
+2. **FRITZ!Box einrichten**: Legen Sie in der FRITZ!Box ein neues **IP-Telefon** an. Wichtig: Benutzername und Passwort müssen exakt mit den Einträgen in der `settings.h` übereinstimmen.
+3. **Upload**: Schließen Sie den WT32-ETH01 an und starten Sie den **Upload** über PlatformIO.
+4. **Konfiguration**: Alle Einstellungen über die Web-GUI vornehmen
 
-
-## 🛡️ Sicherheitshinweis
-
-Um private Zugangsdaten zu schützen, nutzt dieses Projekt ein Vorlagen-System:
-1.  Benenne `include/settings_example.h` um in `include/settings.h`.
-2.  Trage dort deine echten Zugangsdaten ein.
-3.  Die `settings.h` wird durch die `.gitignore` **nicht** hochgeladen.
 
 ---
 
