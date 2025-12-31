@@ -13,6 +13,12 @@ bool startTonePlayed = false;
 String aktuelleEingabe = "";
 int geschuetzteTaste = -1; 
 
+// Task-Handhabung für Audio
+TaskHandle_t audioTaskHandle = NULL;
+QueueHandle_t audioQueue;
+
+enum ToneType { TONE_OK, TONE_ERR, TONE_ALARM, TONE_START, TONE_TIMEOUT, TONE_PIN };
+
 char sipBuffer[2048];
 Sip sip(sipBuffer, sizeof(sipBuffer));
 
@@ -73,6 +79,26 @@ bool isCallerWhitelisted() {
     Serial.printf("WHITELIST| %s nicht in Liste. Zugriff verweigert.\n", caller.c_str());
     return false;
 }
+
+void audioWorker(void *pvParameters) {
+    ToneType toneToPlay;
+    for (;;) {
+        // Wartet, bis eine Anforderung in der Queue landet
+        if (xQueueReceive(audioQueue, &toneToPlay, portMAX_DELAY)) {
+            Serial.println("AUDIO| Spiele Ton im Hintergrund-Task...");
+            switch (toneToPlay) {
+                case TONE_OK:      sip.rtp.playToneOk(); break;
+                case TONE_ERR:     sip.rtp.playToneErr(); break;
+                case TONE_ALARM:   sip.rtp.playToneAlarm(); break;
+                case TONE_START:   sip.rtp.playToneStart(); break;
+                case TONE_TIMEOUT: sip.rtp.playToneTimeout(); break;
+                case TONE_PIN:     sip.rtp.playPinRequest(); break;
+            }
+        }
+    }
+}
+
+
 
 // --- Setup ---
 
@@ -135,6 +161,22 @@ void setup() {
     lastRegister = millis();
     
     webHandler.begin(); // Webserver starten
+
+    // Audio Queue erstellen (Platz für 5 Anforderungen)
+    audioQueue = xQueueCreate(5, sizeof(ToneType));
+
+    // Task auf Core 0 starten (Netzwerk & Loop laufen meist auf Core 1)
+    xTaskCreatePinnedToCore(
+        audioWorker,     // Funktion
+        "AudioTask",     // Name
+        4096,            // Stack-Größe
+        NULL,            // Parameter
+        2,               // Priorität (höher als Webserver)
+        &audioTaskHandle,// Task-Handle
+        0                // CORE 0
+    );
+    
+    Serial.println("SYSTEM| Audio-Task auf Core 0 gestartet.");
 }
 
 // --- Hauptschleife ---
@@ -160,6 +202,7 @@ void loop() {
             Serial.println("\n-----------------------");
         }
     }
+    
     sip.HandleUdpPacket();
 
     if (sip.IsBusy()) {
@@ -174,7 +217,9 @@ void loop() {
 
         if (sip.isConnected && !startTonePlayed) {
             Serial.println("CALL| Handshake komplett.");
-            sip.rtp.playToneStart(); 
+            // NEU: Über Queue
+            ToneType t = TONE_START;
+            xQueueSend(audioQueue, &t, 0);
             startTonePlayed = true;
         }
 
@@ -193,19 +238,21 @@ void loop() {
                 else if (taste >= '0' && taste <= '9') {
                     int index = taste - '0';
                     
-                    // NEU: Wenn die Taste NICHT belegt ist (-1), spiele den Alarm-Ton
                     if (config.relaisPins[index] == -1) {
                         Serial.printf("SIP| Taste %d ist unbelegt -> Spiele Alarm-Ton.\n", index);
-                        sip.rtp.playToneAlarm(); // Hier wird der Ton für die unbelegte Taste gesendet
-                        return; // Danach abbrechen, da keine weitere Aktion (PIN/Relais) folgen soll
+                        // NEU: Über Queue
+                        ToneType t = TONE_ALARM;
+                        xQueueSend(audioQueue, &t, 0);
+                        return; 
                     }
-                    // Whitelist Prüfung aus Config
+
                     if (config.whitelistRequired[index]) {
                         if (!isCallerWhitelisted()) {
-                            // Dieser Block wird jetzt AUCH ausgeführt, wenn die Liste leer ist
                             Serial.printf("SECURITY| Taste %d für Anrufer %s gesperrt!\n", index, sip.caCallerNr);
-                            sip.rtp.playToneErr(); // Fehler-Ton
-                            return; // Wichtig: Bricht die weitere Verarbeitung ab
+                            // NEU: Über Queue
+                            ToneType t = TONE_ERR;
+                            xQueueSend(audioQueue, &t, 0);
+                            return; 
                         }
                     }
 
@@ -222,11 +269,15 @@ void loop() {
                                     digitalWrite(pin, HIGH);
                                     relaisListe[geschuetzteTaste].aktiv = true;
                                     relaisListe[geschuetzteTaste].startMillis = millis();
-                                    sip.rtp.playToneOk();
+                                    // NEU: Über Queue
+                                    ToneType t = TONE_OK;
+                                    xQueueSend(audioQueue, &t, 0);
                                 }
                             } else {
                                 Serial.println("SECURITY| PIN FALSCH!");
-                                sip.rtp.playToneErr();
+                                // NEU: Über Queue
+                                ToneType t = TONE_ERR;
+                                xQueueSend(audioQueue, &t, 0);
                             }
                             geschuetzteTaste = -1;
                             aktuelleEingabe = "";
@@ -238,13 +289,17 @@ void loop() {
                             Serial.println("SECURITY| Warte auf PIN...");
                             geschuetzteTaste = index;
                             aktuelleEingabe = "";
-                            sip.rtp.playPinRequest();
+                            // NEU: Über Queue
+                            ToneType t = TONE_PIN;
+                            xQueueSend(audioQueue, &t, 0);
                         } else {
                             if (relaisListe[index].pin != -1) {
                                 digitalWrite(relaisListe[index].pin, HIGH);
                                 relaisListe[index].aktiv = true;
                                 relaisListe[index].startMillis = millis();
-                                sip.rtp.playToneOk(); 
+                                // NEU: Über Queue
+                                ToneType t = TONE_OK;
+                                xQueueSend(audioQueue, &t, 0);
                             }
                         }
                     }
@@ -252,10 +307,12 @@ void loop() {
             }
         }
 
-        // Timeout Management aus Config
+        // Timeout Management
         unsigned long dauerAktiv = millis() - letzteAktivitaet;
         if (sip.isConnected && dauerAktiv > (config.timeout - 2000) && !timeoutWarned) {
-            sip.rtp.playToneTimeout(); 
+            // NEU: Über Queue
+            ToneType t = TONE_TIMEOUT;
+            xQueueSend(audioQueue, &t, 0);
             timeoutWarned = true;
         }
         if (dauerAktiv > config.timeout) {
@@ -274,17 +331,18 @@ void loop() {
         }
     }
 
-    // Impuls-Steuerung am Ende der loop()
+    // Impuls-Steuerung
     for (int i = 0; i < 10; i++) {
         if (relaisListe[i].aktiv) {
             if (millis() - relaisListe[i].startMillis >= config.relaisDauer) {
-                if (relaisListe[i].pin != -1) { // <--- Kleiner Sicherheits-Check
+                if (relaisListe[i].pin != -1) {
                     digitalWrite(relaisListe[i].pin, LOW);
                 }
                 relaisListe[i].aktiv = false;
             }
         }
     }
+
     if (millis() - lastRegister > 240000) {
         sip.Register();
         lastRegister = millis();

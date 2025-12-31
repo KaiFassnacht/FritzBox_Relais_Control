@@ -74,23 +74,32 @@ void RtpAudio::playTone(float frequency, int durationMs) {
     const int samplesPerPacket = 160; 
     uint8_t audioBuf[samplesPerPacket];
     
-    // Sicherstellen, dass mindestens 1 Paket gesendet wird
     int numPackets = durationMs / 20;
     if (numPackets < 1) numPackets = 1; 
 
-    uint32_t nextTick = millis();
+    // Vorbereiten der Sinus-Parameter zur Rechenersparnis
+    float phaseIncrement = 2.0 * PI * frequency / 8000.0;
+    float currentPhase = 0;
+
+    uint32_t startTime = millis();
 
     for (int p = 0; p < numPackets; p++) {
         for (int i = 0; i < samplesPerPacket; i++) {
-            float sample = sin(2.0 * PI * frequency * (p * samplesPerPacket + i) / 8000.0);
-            int16_t pcm = (int16_t)(sample * 16384.0); 
+            float sample = sin(currentPhase);
+            int16_t pcm = (int16_t)(sample * 16383.0); 
             audioBuf[i] = ALaw_Encode(pcm); 
+            currentPhase += phaseIncrement;
+            if (currentPhase >= 2.0 * PI) currentPhase -= 2.0 * PI;
         }
+        
         sendPacket(audioBuf, samplesPerPacket);
         
-        nextTick += 20;
-        long wait = nextTick - millis();
-        if (wait > 0) delay(wait);
+        // Präzises Warten auf das nächste 20ms Intervall
+        uint32_t targetTime = startTime + ((p + 1) * 20);
+        while (millis() < targetTime) {
+            // Kurzes Yield für den Background-Stack (Ethernet/WiFi)
+            delay(1); 
+        }
     }
 }
 
