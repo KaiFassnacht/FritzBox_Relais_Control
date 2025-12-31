@@ -77,27 +77,47 @@ void RtpAudio::playTone(float frequency, int durationMs) {
     int numPackets = durationMs / 20;
     if (numPackets < 1) numPackets = 1; 
 
-    // Vorbereiten der Sinus-Parameter zur Rechenersparnis
-    float phaseIncrement = 2.0 * PI * frequency / 8000.0;
-    float currentPhase = 0;
+    double currentPhase = 0.0;
+    double phaseIncrement = 2.0 * M_PI * frequency / 8000.0;
+    
+    // WICHTIG: Je höher der Ton, desto leiser muss er sein, 
+    // um das digitale "Kratzen" bei 8kHz zu minimieren.
+    float maxAmplitude = 10000.0f; 
+    if (frequency > 800)  maxAmplitude = 8000.0f;
+    if (frequency > 1000) maxAmplitude = 6500.0f; // Starke Absenkung für 1046Hz
 
     uint32_t startTime = millis();
 
     for (int p = 0; p < numPackets; p++) {
         for (int i = 0; i < samplesPerPacket; i++) {
             float sample = sin(currentPhase);
-            int16_t pcm = (int16_t)(sample * 16383.0); 
-            audioBuf[i] = ALaw_Encode(pcm); 
+            
+            float envelope = 1.0f;
+            int currentSampleIdx = (p * samplesPerPacket) + i;
+            int totalSamples = numPackets * samplesPerPacket;
+            
+            // Längere Fades (15ms statt 10ms) für hohe Töne
+            int fadeSamples = 120; 
+            if (currentSampleIdx < fadeSamples) {
+                envelope = (float)currentSampleIdx / (float)fadeSamples;
+            } else if (currentSampleIdx > (totalSamples - fadeSamples)) {
+                envelope = (float)(totalSamples - currentSampleIdx) / (float)fadeSamples;
+            }
+
+            // PCM Wert berechnen
+            int16_t pcm = (int16_t)(sample * maxAmplitude * envelope);
+            audioBuf[i] = ALaw_Encode(pcm);
+            
             currentPhase += phaseIncrement;
-            if (currentPhase >= 2.0 * PI) currentPhase -= 2.0 * PI;
         }
+        
+        // Phase stabil halten
+        currentPhase = fmod(currentPhase, 2.0 * M_PI);
         
         sendPacket(audioBuf, samplesPerPacket);
         
-        // Präzises Warten auf das nächste 20ms Intervall
         uint32_t targetTime = startTime + ((p + 1) * 20);
         while (millis() < targetTime) {
-            // Kurzes Yield für den Background-Stack (Ethernet/WiFi)
             delay(1); 
         }
     }
