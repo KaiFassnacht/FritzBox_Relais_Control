@@ -26,6 +26,7 @@ String processor(const String& var) {
         for (int i = 0; i < 10; i++) {
             table += "<tr>";
             table += "<td>" + String(i) + "</td>";
+            table += "<td><input type='text' name='n" + String(i) + "' value='" + String(config.relaisNames[i]) + "' maxlength='20' style='width:120px'></td>";
             table += "<td><input type='number' name='p" + String(i) + "' value='" + String(config.relaisPins[i]) + "' style='width:50px'></td>";
             table += "<td><input type='text' name='c" + String(i) + "' value='" + String(config.pins[i]) + "' maxlength='7' style='width:80px'></td>";
             String checked = config.whitelistRequired[i] ? "checked" : "";
@@ -131,7 +132,10 @@ void WebHandler::setupRoutes() {
             String pKey = "p" + String(i);
             String cKey = "c" + String(i);
             String wKey = "w" + String(i);
-
+            String nKey = "n" + String(i);
+            if (request->hasParam(nKey, true)) {
+                strlcpy(config.relaisNames[i], request->getParam(nKey, true)->value().c_str(), 21);
+            }
             if (request->hasParam(pKey, true)) {
                 config.relaisPins[i] = request->getParam(pKey, true)->value().toInt();
             }

@@ -33,6 +33,7 @@ void setDefaults() {
         config.relaisPins[i] = (i < 7) ? defaultPins[i] : -1;
         memset(config.pins[i], 0, sizeof(config.pins[i]));
         config.whitelistRequired[i] = false;
+        snprintf(config.relaisNames[i], 21, "Relais %d", i);
     }
 
     // Audio Defaults (wie in deiner settings.h definiert)
@@ -44,6 +45,7 @@ void setDefaults() {
     config.toneTimeout[2] = {150, 60, 100}; config.toneTimeout[3] = {150, 60, 0};
     config.tonePinRequest[0] = {880, 80, 40}; config.tonePinRequest[1] = {1046, 120, 0};
     config.tonePinRequest[2] = {880, 80, 40}; config.tonePinRequest[3] = {1046, 120, 0};
+    
 }
 
 bool loadConfig() {
@@ -83,6 +85,9 @@ bool loadConfig() {
         config.relaisPins[i] = doc["relaisPins"][i] | config.relaisPins[i];
         if (doc["pins"][i]) strlcpy(config.pins[i], doc["pins"][i], sizeof(config.pins[i]));
         config.whitelistRequired[i] = doc["whitelistReq"][i] | config.whitelistRequired[i];
+        if (doc["relaisNames"][i].is<const char*>()) {
+            strlcpy(config.relaisNames[i], doc["relaisNames"][i], 21);
+        }
     }
 
     // Audio-Sequenzen laden
@@ -137,6 +142,10 @@ bool saveConfig() {
         rPins.add(config.relaisPins[i]);
         pCodes.add(config.pins[i]);
         wReq.add(config.whitelistRequired[i]);
+    }
+    JsonArray names = doc["relaisNames"].to<JsonArray>();
+    for (int i = 0; i < 10; i++) {
+        names.add(config.relaisNames[i]);
     }
 
     // Audio-Sequenzen speichern
