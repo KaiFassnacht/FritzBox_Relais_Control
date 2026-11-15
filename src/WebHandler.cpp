@@ -157,7 +157,46 @@ void WebHandler::setupRoutes() {
             }
         }
     });  
-      
+    
+    server.on("/update-filesystem", HTTP_POST, [](AsyncWebServerRequest *request) {
+        bool success = !Update.hasError();
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", success ? "OK" : "FAIL");
+        response->addHeader("Connection", "close");
+        request->send(response);
+        delay(500);
+        ESP.restart();
+    }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!index) {
+            Serial.printf("OTA FileSystem Start: %s\n", filename.c_str());
+            
+            // Exakte Partitionsgröße für das Dateisystem ermitteln
+            const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+            size_t updateSize = UPDATE_SIZE_UNKNOWN;
+            if (partition) {
+                updateSize = partition->size;
+                Serial.printf("OTA FS| LittleFS Partition gefunden, Größe: %u Bytes\n", updateSize);
+            } else {
+                Serial.println("OTA FS| WARNUNG: Partition nicht gefunden, nutze Fallback!");
+            }
+
+            if (!Update.begin(updateSize, U_SPIFFS)) {
+                Update.printError(Serial);
+            }
+        }
+        if (len) {
+            if (Update.write(data, len) != len) {
+                Update.printError(Serial);
+            }
+        }
+        if (final) {
+            if (Update.end(true)) {
+                Serial.printf("OTA FileSystem Success: %uB\n", index + len);
+            } else {
+                Update.printError(Serial);
+            }
+        }
+    });
+
     server.on("/upload-config", HTTP_POST, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Upload erfolgreich. System startet neu...");
         delay(1000);

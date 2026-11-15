@@ -235,6 +235,19 @@ void loop() {
                     Serial.println("ACTION| Auflegen via #");
                     sip.Bye(0);
                 }
+                else if (taste == '*') {
+                    if (geschuetzteTaste != -1) {
+                        Serial.println("SECURITY| PIN-Eingabe durch Benutzer via '*' abgebrochen.");
+                        ToneType t = TONE_ERR;
+                        xQueueSend(audioQueue, &t, 0);
+                        geschuetzteTaste = -1;
+                        aktuelleEingabe = "";
+                    } else {
+                        Serial.println("SIP| '*' im Hauptmenü gedrückt (ohne Funktion).");
+                        ToneType t = TONE_ERR;
+                        xQueueSend(audioQueue, &t, 0);
+                    }
+                }
                 else if (taste >= '0' && taste <= '9') {
                     int index = taste - '0';
 
@@ -297,6 +310,16 @@ void loop() {
                     }
                     // BEREICH 2: Wir befinden uns MITTEN in einer PIN-Nachwahl
                     else {
+                        // PIN-Eingabe abbrechen mit Stern-Taste (*)
+                        if (taste == '*') {
+                            Serial.println("SECURITY| PIN-Eingabe durch Benutzer via '*' abgebrochen.");
+                            ToneType t = TONE_ERR;
+                            xQueueSend(audioQueue, &t, 0);
+                            geschuetzteTaste = -1;
+                            aktuelleEingabe = "";
+                            return;
+                        }
+
                         aktuelleEingabe += taste;
                         Serial.printf("SECURITY| PIN-Nachwahl: Ziffer %c empfangen (Aktuell: %s)\n", taste, aktuelleEingabe.c_str());
                         
