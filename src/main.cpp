@@ -249,11 +249,13 @@ void loop() {
                     }
                 }
                 else if (taste >= '0' && taste <= '9') {
+                    // Jedes Mal, wenn eine Ziffer gedrückt wird, setzen wir den PIN-Timer neu
+                    letzteAktivitaet = millis();
+
                     int index = taste - '0';
 
                     // BEREICH 1: Wenn wir im Hauptmenü sind (keine PIN-Eingabe aktiv)
                     if (geschuetzteTaste == -1) {
-                        // 1. Prüfen ob GPIO == -1 (unbelegt im Hauptmenü)
                         if (config.relaisPins[index] == -1) {
                             Serial.printf("SIP| Taste %d hat keinen GPIO (-1) -> Abbruch (Alarm-Ton).\n", index);
                             ToneType t = TONE_ALARM;
@@ -261,7 +263,6 @@ void loop() {
                             return; 
                         }
 
-                        // 2. Whitelist-Prüfung NUR DURCHFÜHREN, wenn das Häkchen für diese Taste gesetzt ist!
                         bool whitelisted = false;
                         if (config.whitelistRequired[index]) {
                             whitelisted = isCallerWhitelisted();
@@ -273,7 +274,6 @@ void loop() {
                             }
                         }
 
-                        // 3. ENTSCHEIDUNG: Wenn Whitelist-Häkchen gesetzt UND Anrufer drin -> Direkt schalten (PIN überspringen)!
                         if (config.whitelistRequired[index] && whitelisted) {
                             int pin = relaisListe[index].pin;
                             if (pin != -1) {
@@ -286,7 +286,6 @@ void loop() {
                             }
                         } 
                         else {
-                            // 4. Entweder kein Whitelist-Häkchen ODER Whitelist nicht aktiv -> Ganz normal nach PIN prüfen
                             String benoetigtePin = String(config.pins[index]);
                             if (benoetigtePin.length() > 0) {
                                 Serial.printf("SECURITY| Taste %d erfordert PIN. Warte auf Eingabe...\n", index);
@@ -295,7 +294,6 @@ void loop() {
                                 ToneType t = TONE_PIN;
                                 xQueueSend(audioQueue, &t, 0);
                             } else {
-                                // 5. Weder Whitelist-Häkchen noch PIN -> Direkt schalten (falls GPIO da)
                                 int pin = relaisListe[index].pin;
                                 if (pin != -1) {
                                     digitalWrite(pin, HIGH);
@@ -310,16 +308,6 @@ void loop() {
                     }
                     // BEREICH 2: Wir befinden uns MITTEN in einer PIN-Nachwahl
                     else {
-                        // PIN-Eingabe abbrechen mit Stern-Taste (*)
-                        if (taste == '*') {
-                            Serial.println("SECURITY| PIN-Eingabe durch Benutzer via '*' abgebrochen.");
-                            ToneType t = TONE_ERR;
-                            xQueueSend(audioQueue, &t, 0);
-                            geschuetzteTaste = -1;
-                            aktuelleEingabe = "";
-                            return;
-                        }
-
                         aktuelleEingabe += taste;
                         Serial.printf("SECURITY| PIN-Nachwahl: Ziffer %c empfangen (Aktuell: %s)\n", taste, aktuelleEingabe.c_str());
                         
@@ -348,6 +336,15 @@ void loop() {
                 }
             }
         }
+
+        if (geschuetzteTaste != -1 && (millis() - letzteAktivitaet > 8000)) {
+            Serial.println("SECURITY| PIN-Eingabe wegen Inaktivität abgebrochen (Timeout).");
+            ToneType t = TONE_ERR;
+            xQueueSend(audioQueue, &t, 0);
+            geschuetzteTaste = -1;
+            aktuelleEingabe = "";
+        }
+
         // Timeout Management
         unsigned long dauerAktiv = millis() - letzteAktivitaet;
         if (sip.isConnected && dauerAktiv > (config.timeout - 2000) && !timeoutWarned) {
