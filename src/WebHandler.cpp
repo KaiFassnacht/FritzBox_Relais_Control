@@ -4,6 +4,13 @@
 
 Ticker restartTimer;
 
+
+
+// Hilfsfunktion für Authentifizierung außerhalb von begin() definiert
+bool checkAuth(AsyncWebServerRequest *request) {
+    return request->authenticate(config.webUser, config.webPass);
+}
+
 void WebHandler::begin() {
     setupRoutes();
     server.begin();
@@ -11,17 +18,16 @@ void WebHandler::begin() {
 }
 
 String processor(const String& var) {
+    if (var == "WEBUSER") return String(config.webUser);
     if (var == "SIPREG") return (config.sipRegistrar[0] == '\0') ? "" : String(config.sipRegistrar);
     if (var == "SIPUSER") return (config.sipUser[0] == '\0') ? "" : String(config.sipUser);
     if (var == "SIPPASS") return (config.sipPass[0] == '\0') ? "" : String(config.sipPass);
     if (var == "SIPPORT") return String(config.sipPort);
     if (var == "RTPPORT") return String(config.rtpPort);
-
-
     if (var == "WHITELIST") return (config.whitelist.length() == 0) ? "" : config.whitelist;
-    
     if (var == "RELDUR") return String(config.relaisDauer);
     if (var == "TIMEOUT") return String(config.timeout);
+    
     if (var == "RELAIS_TABLE") {
         String table = "";
         for (int i = 0; i < 10; i++) {
@@ -58,8 +64,6 @@ String processor(const String& var) {
         
         return html;
     }    
-        
-    
     return ""; 
 }
 
@@ -80,26 +84,38 @@ void WebHandler::setupRoutes() {
         request->send(LittleFS, "/style.css", "text/css");
     });
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(LittleFS, "/index.html", String(), false, processor);
-    });
-
     server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(204); 
     });
 
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
+        request->send(LittleFS, "/index.html", String(), false, processor);
+    });
+
     server.on("/audio", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
         request->send(LittleFS, "/audio.html", String(), false, processor);
     });
 
     server.on("/network", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
         request->send(LittleFS, "/network.html", String(), false, processor);
     });
+
     server.on("/relais", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
         request->send(LittleFS, "/relais.html", String(), false, processor);
     });
+
     server.on("/factory", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
         request->send(LittleFS, "/factory.html", String(), false, processor);
+    });
+
+    server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!checkAuth(request)) return request->requestAuthentication();
+        request->send(LittleFS, "/update.html", "text/html");
     });
 
     server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -108,46 +124,40 @@ void WebHandler::setupRoutes() {
 
     server.on("/download-config", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (LittleFS.exists("/config.json")) {
-            // "true" am Ende erzwingt den Download-Dialog im Browser
             request->send(LittleFS, "/config.json", "application/json", true);
         } else {
             request->send(404, "text/plain", "Konfiguration nicht gefunden.");
         }
     });
 
-server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(LittleFS, "/update.html", "text/html");
-});
-
-server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
-    bool success = !Update.hasError();
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", success ? "OK" : "FAIL");
-    response->addHeader("Connection", "close");
-    request->send(response);
-    delay(500);
-    ESP.restart();
-}, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-    if (!index) {
-        Serial.printf("OTA Start: %s\n", filename.c_str());
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-            Update.printError(Serial);
+    server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
+        bool success = !Update.hasError();
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", success ? "OK" : "FAIL");
+        response->addHeader("Connection", "close");
+        request->send(response);
+        delay(500);
+        ESP.restart();
+    }, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!index) {
+            Serial.printf("OTA Start: %s\n", filename.c_str());
+            if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+                Update.printError(Serial);
+            }
         }
-    }
-    if (len) {
-        if (Update.write(data, len) != len) {
-            Update.printError(Serial);
+        if (len) {
+            if (Update.write(data, len) != len) {
+                Update.printError(Serial);
+            }
         }
-    }
-    if (final) {
-        if (Update.end(true)) {
-            Serial.printf("OTA Success: %uB\n", index + len);
-        } else {
-            Update.printError(Serial);
+        if (final) {
+            if (Update.end(true)) {
+                Serial.printf("OTA Success: %uB\n", index + len);
+            } else {
+                Update.printError(Serial);
+            }
         }
-    }
     });  
       
-    // Konfiguration uploaden
     server.on("/upload-config", HTTP_POST, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Upload erfolgreich. System startet neu...");
         delay(1000);
@@ -157,7 +167,18 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
     });
 
     server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
-        // 1. SIP & Ports (mit hasParam)
+        // 0. Web-Zugang (Login) Parameter einlesen
+        if (request->hasParam("webUser", true)) {
+            strlcpy(config.webUser, request->getParam("webUser", true)->value().c_str(), sizeof(config.webUser));
+        }
+        if (request->hasParam("webPass", true)) {
+            String p = request->getParam("webPass", true)->value();
+            if (p.length() > 0) { 
+                strlcpy(config.webPass, p.c_str(), sizeof(config.webPass));
+            }
+        }
+
+        // 1. SIP & Ports
         if (request->hasParam("sipReg", true)) strlcpy(config.sipRegistrar, request->getParam("sipReg", true)->value().c_str(), 63);
         if (request->hasParam("sipUser", true)) strlcpy(config.sipUser, request->getParam("sipUser", true)->value().c_str(), 31);
         if (request->hasParam("sipPass", true)) strlcpy(config.sipPass, request->getParam("sipPass", true)->value().c_str(), 31);
@@ -178,7 +199,7 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
             config.timeout = (val < 5000) ? 5000 : (val > 3600000 ? 3600000 : val);
         }
 
-        // 3. Relais-Tabelle (Schleife mit hasParam)
+        // 3. Relais-Tabelle
         for (int i = 0; i < 10; i++) {
             String pKey = "p" + String(i);
             String cKey = "c" + String(i);
@@ -193,12 +214,10 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
             if (request->hasParam(cKey, true)) {
                 strlcpy(config.pins[i], request->getParam(cKey, true)->value().c_str(), 7);
             }
-            
-            // Checkboxen: hasParam liefert true, wenn die Box angehakt wurde
             config.whitelistRequired[i] = request->hasParam(wKey, true);
         }
         
-        // 4. Audio-Konfiguration (Lambda Funktion zur Wiederverwendung)
+        // 4. Audio-Konfiguration
         auto collectAudio = [&](String prefix, ToneConfig* steps, int count) {
             for (int i = 0; i < count; i++) {
                 if (request->hasParam(prefix + "f" + String(i), true)) 
@@ -217,8 +236,6 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
         collectAudio("to", config.toneTimeout, 4);
         collectAudio("pr", config.tonePinRequest, 4);
 
-
-
         saveConfig();
         
         request->send(200, "text/plain", "Konfiguration gespeichert. Das System startet in 2 Sekunden neu...");
@@ -228,7 +245,6 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
         });
     });
     
-    // Separater Save-Handler für Audio (ohne Reboot!)
     server.on("/save-audio", HTTP_POST, [](AsyncWebServerRequest *request) {
         auto collectAudio = [&](String prefix, ToneConfig* steps, int count) {
             for (int i = 0; i < count; i++) {
@@ -248,35 +264,27 @@ server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
         collectAudio("to", config.toneTimeout, 4);
         collectAudio("pr", config.tonePinRequest, 4);
 
-        saveConfig(); // Speichern auf LittleFS
+        saveConfig(); 
         request->send(200, "text/plain", "Audio gespeichert");
     });
 
-    // Werkseinstellungen Route
     server.on("/factory-reset", HTTP_POST, [](AsyncWebServerRequest *request) {
         Serial.println("WEB| Factory Reset angefordert...");
-        
-        // Datei löschen
         if (LittleFS.exists("/config.json")) {
             LittleFS.remove("/config.json");
         }
-        
         request->send(200, "text/plain", "Werkseinstellungen geladen. Neustart...");
-        
-        // Neustart via Timer, damit die Antwort noch rausgeht
         restartTimer.once_ms(2000, []() {
             ESP.restart();
         });
     });
 }
 
-// Die Implementierung der Upload-Logik
 void WebHandler::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
     static File uploadFile;
     
-    if (!index) { // Erster Block der Datei
+    if (!index) {
         Serial.printf("CFG| Upload Start: %s\n", filename.c_str());
-        // Wir speichern alles als /config.json, egal wie die Datei am PC hieß
         uploadFile = LittleFS.open("/config.json", "w");
         if(!uploadFile) Serial.println("CFG| FEHLER: Konnte Datei nicht zum Schreiben öffnen!");
     }
@@ -285,7 +293,7 @@ void WebHandler::handleUpload(AsyncWebServerRequest *request, String filename, s
         uploadFile.write(data, len);
     }
     
-    if (final) { // Letzter Block
+    if (final) {
         if (uploadFile) uploadFile.close();
         Serial.println("CFG| Upload fertig!");
     }

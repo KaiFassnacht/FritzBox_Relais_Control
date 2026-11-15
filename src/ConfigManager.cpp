@@ -16,12 +16,13 @@ void validatePins() {
     if (changed) saveConfig();
 }
 
-// Hilfsfunktion: Setzt alle Werte auf sichere Standards inklusive Audio
 void setDefaults() {
     Serial.println("CFG| Setze Standardwerte...");
     strlcpy(config.sipUser, "", sizeof(config.sipUser));
     strlcpy(config.sipPass, "", sizeof(config.sipPass));
     strlcpy(config.sipRegistrar, "192.168.178.1", sizeof(config.sipRegistrar));
+    strlcpy(config.webUser, "admin", sizeof(config.webUser));
+    strlcpy(config.webPass, "admin", sizeof(config.webPass));
     config.sipPort = 5060;
     config.rtpPort = 10002;
     config.relaisDauer = 1000;
@@ -36,7 +37,6 @@ void setDefaults() {
         snprintf(config.relaisNames[i], 21, "Relais %d", i);
     }
 
-    // Audio Defaults (wie in deiner settings.h definiert)
     config.toneOk[0] = {660, 150, 20}; config.toneOk[1] = {880, 150, 0};
     config.toneErr[0] = {300, 200, 20}; config.toneErr[1] = {200, 200, 0};
     config.toneAlarm[0] = {1000, 80, 0}; config.toneAlarm[1] = {800, 80, 0}; config.toneAlarm[2] = {600, 80, 0};
@@ -45,7 +45,6 @@ void setDefaults() {
     config.toneTimeout[2] = {150, 60, 100}; config.toneTimeout[3] = {150, 60, 0};
     config.tonePinRequest[0] = {880, 80, 40}; config.tonePinRequest[1] = {1046, 120, 0};
     config.tonePinRequest[2] = {880, 80, 40}; config.tonePinRequest[3] = {1046, 120, 0};
-    
 }
 
 bool loadConfig() {
@@ -70,10 +69,13 @@ bool loadConfig() {
         return false;
     }
 
-    // Basis & SIP
+    // Basis & SIP & Web-Auth
     if (doc["sipUser"].is<const char*>()) strlcpy(config.sipUser, doc["sipUser"], sizeof(config.sipUser));
     if (doc["sipPass"].is<const char*>()) strlcpy(config.sipPass, doc["sipPass"], sizeof(config.sipPass));
     if (doc["sipRegistrar"].is<const char*>()) strlcpy(config.sipRegistrar, doc["sipRegistrar"], sizeof(config.sipRegistrar));    
+    if (doc["webUser"].is<const char*>()) strlcpy(config.webUser, doc["webUser"], sizeof(config.webUser));
+    if (doc["webPass"].is<const char*>()) strlcpy(config.webPass, doc["webPass"], sizeof(config.webPass));
+
     config.sipPort = doc["sipPort"] | config.sipPort;
     config.rtpPort = doc["rtpPort"] | config.rtpPort;
     config.whitelist = doc["whitelist"] | config.whitelist;
@@ -90,7 +92,6 @@ bool loadConfig() {
         }
     }
 
-    // Audio-Sequenzen laden
     auto loadAudio = [&](const char* key, ToneConfig* steps, int count) {
         if (doc[key].is<JsonArray>()) {
             for (int i = 0; i < count; i++) {
@@ -116,7 +117,6 @@ bool loadConfig() {
 }
 
 bool saveConfig() {
-    // Hardware-Schutz
     for (int i = 0; i < 10; i++) {
         int p = config.relaisPins[i];
         if (p == 16 || p == 17 || p == 23 || p == 18 || p == 0) config.relaisPins[i] = -1;
@@ -134,7 +134,9 @@ bool saveConfig() {
     doc["whitelist"] = config.whitelist;
     doc["relaisDauer"] = config.relaisDauer;
     doc["timeout"] = config.timeout;
-
+    doc["webUser"] = config.webUser;
+    doc["webPass"] = config.webPass;
+    
     JsonArray rPins = doc["relaisPins"].to<JsonArray>();
     JsonArray pCodes = doc["pins"].to<JsonArray>();
     JsonArray wReq = doc["whitelistReq"].to<JsonArray>();
@@ -148,7 +150,6 @@ bool saveConfig() {
         names.add(config.relaisNames[i]);
     }
 
-    // Audio-Sequenzen speichern
     auto saveAudio = [&](const char* key, ToneConfig* steps, int count) {
         JsonArray toneArr = doc[key].to<JsonArray>();
         for (int i = 0; i < count; i++) {
