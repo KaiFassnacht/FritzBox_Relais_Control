@@ -1,4 +1,5 @@
 #include "WebHandler.h"
+#include <Update.h>
 #include <Ticker.h>
 
 Ticker restartTimer;
@@ -114,6 +115,38 @@ void WebHandler::setupRoutes() {
         }
     });
 
+server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(LittleFS, "/update.html", "text/html");
+});
+
+server.on("/update-firmware", HTTP_POST, [](AsyncWebServerRequest *request) {
+    bool success = !Update.hasError();
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", success ? "OK" : "FAIL");
+    response->addHeader("Connection", "close");
+    request->send(response);
+    delay(500);
+    ESP.restart();
+}, [](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    if (!index) {
+        Serial.printf("OTA Start: %s\n", filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            Update.printError(Serial);
+        }
+    }
+    if (len) {
+        if (Update.write(data, len) != len) {
+            Update.printError(Serial);
+        }
+    }
+    if (final) {
+        if (Update.end(true)) {
+            Serial.printf("OTA Success: %uB\n", index + len);
+        } else {
+            Update.printError(Serial);
+        }
+    }
+    });  
+      
     // Konfiguration uploaden
     server.on("/upload-config", HTTP_POST, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Upload erfolgreich. System startet neu...");
@@ -122,7 +155,6 @@ void WebHandler::setupRoutes() {
     }, [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         this->handleUpload(request, filename, index, data, len, final);
     });
-
 
     server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
         // 1. SIP & Ports (mit hasParam)

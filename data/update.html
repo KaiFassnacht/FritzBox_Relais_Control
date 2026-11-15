@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firmware Update</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="btn-back">← Zurück zum Menü</a>
+        <h1>Firmware Update (OTA)</h1>
+        
+        <div class="section" style="background:#f0f7ff; border:1px solid #b8daff;">
+            <h3>Firmware-Datei (.bin) über LAN einspielen</h3>
+            <p>Wähle die kompilierte Binärdatei deiner Firmware aus und starte den Upload. Das Gerät führt nach erfolgreichem Update einen Neustart durch.</p>
+            
+            <div style="margin-top: 20px;">
+                <input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="uploadFirmware()">
+                <button id="uploadBtn" onclick="document.getElementById('firmwareFile').click()" class="btn" style="background:#007bff; width: 100%;">Firmware-Datei auswählen</button>
+            </div>
+
+            <div id="progressWrapper" class="progress-wrapper" style="display:none; margin-top:15px; background:#ddd; border-radius:4px; overflow:hidden;">
+                <div id="progressBar" class="progress-bar" style="width:0%; background:#007bff; color:white; text-align:center; padding:4px 0; font-size:12px;">0%</div>
+            </div>
+        </div>
+
+        <div id="status-msg" style="display:none; margin-top: 20px; padding:10px; border-radius:4px;"></div>
+    </div>
+
+    <script>
+    function uploadFirmware() {
+        const fileInput = document.getElementById('firmwareFile');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressWrapper = document.getElementById('progressWrapper');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('status-msg');
+        
+        if (fileInput.files.length === 0) return;
+
+        if (!confirm("Möchtest du die ausgewählte Firmware wirklich flashen? Unterbreche keinesfalls die Stromversorgung während des Vorgangs!")) {
+            fileInput.value = '';
+            return;
+        }
+
+        uploadBtn.disabled = true;
+        uploadBtn.style.background = '#6c757d';
+        progressWrapper.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressBar.innerText = '0%';
+        
+        statusText.style.display = 'block';
+        statusText.style.background = '#e2f3ff';
+        statusText.style.color = '#004085';
+        statusText.innerText = 'Übertrage Firmware... Bitte Seite nicht schließen.';
+
+        const formData = new FormData();
+        formData.append("update", fileInput.files[0]);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/update-firmware', true);
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = percent + '%';
+                progressBar.innerText = percent + '%';
+                
+                if (percent === 100) {
+                    statusText.innerText = 'Datei übertragen. Schreibe Flash-Speicher...';
+                }
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                progressBar.style.backgroundColor = '#28a745';
+                let seconds = 8;
+                const timer = setInterval(() => {
+                    statusText.innerText = `Update erfolgreich! Neustart läuft... Rückkehr in ${seconds} Sek.`;
+                    seconds--;
+                    if (seconds < 0) {
+                        clearInterval(timer);
+                        window.location.href = '/';
+                    }
+                }, 1000);
+            } else {
+                progressBar.style.backgroundColor = '#d9534f';
+                statusText.style.background = '#f8d7da';
+                statusText.style.color = '#721c24';
+                statusText.innerText = 'Fehler beim Firmware-Update!';
+                uploadBtn.disabled = false;
+                uploadBtn.style.background = '#007bff';
+            }
+        };
+
+        xhr.onerror = function() {
+            statusText.innerText = 'Verbindung getrennt (Gerät startet neu)...';
+            setTimeout(() => { window.location.href = '/'; }, 8000);
+        };
+
+        xhr.send(formData);
+    }
+    </script>
+</body>
+</html>
